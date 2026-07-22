@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Hand & Face Skeleton ESP</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Hand Skeleton · Draw</title>
 
     <style>
         * {
@@ -11,38 +11,44 @@
             padding: 0;
             box-sizing: border-box;
         }
+
+        html,
         body {
             background: #0a0a0f;
             overflow: hidden;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
             touch-action: none;
             user-select: none;
             -webkit-user-select: none;
-            position: relative;
-            height: 100vh;
-            width: 100vw;
+            height: 100%;
+            width: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
         }
 
         #container {
             position: relative;
             width: 100vw;
             height: 100vh;
-            background: #0a0a0f;
+            height: 100dvh;
+            background: #000;
             overflow: hidden;
         }
 
+        /* video hidden – only used for tracking */
         #video {
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transform: scaleX(-1);
-            filter: brightness(0.7) contrast(1.1) saturate(0.9);
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
             z-index: 0;
         }
 
+        /* main canvas – black bg + skeleton + drawing */
         #canvas {
             position: absolute;
             top: 0;
@@ -51,95 +57,127 @@
             height: 100%;
             display: block;
             z-index: 1;
-            transform: scaleX(-1);
             touch-action: none;
-            pointer-events: none;
+            background: #000;
+            transform: scaleX(-1);
         }
 
-        /* Controls overlay */
-        #ui-overlay {
+        /* status / prompt overlay */
+        #status {
             position: absolute;
-            bottom: 30px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            color: rgba(0, 255, 200, 0.6);
+            font-size: clamp(28px, 8vw, 56px);
+            font-weight: 300;
+            letter-spacing: 4px;
+            text-align: center;
+            pointer-events: none;
+            text-shadow: 0 0 60px rgba(0, 255, 200, 0.15), 0 0 120px rgba(0, 255, 200, 0.05);
+            transition: opacity 0.6s ease;
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        #status.hidden {
+            opacity: 0;
+        }
+        #status .sub {
+            font-size: clamp(12px, 2.5vw, 18px);
+            opacity: 0.4;
+            letter-spacing: 2px;
+            margin-top: 10px;
+            font-weight: 300;
+        }
+
+        /* small fps counter */
+        #fps-display {
+            position: absolute;
+            top: 18px;
+            right: 18px;
+            z-index: 5;
+            color: rgba(0, 255, 200, 0.25);
+            font-size: clamp(10px, 1.8vw, 13px);
+            font-family: 'SF Mono', 'Menlo', monospace;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 4px 12px;
+            border-radius: 20px;
+            border: 1px solid rgba(0, 255, 200, 0.06);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            letter-spacing: 0.5px;
+        }
+
+        /* bottom toolbar – safe area aware */
+        #toolbar {
+            position: absolute;
+            bottom: max(20px, env(safe-area-inset-bottom, 20px));
             left: 0;
             right: 0;
+            z-index: 10;
             display: flex;
             justify-content: center;
-            gap: 16px;
-            z-index: 10;
-            padding: 0 20px;
+            gap: clamp(10px, 3vw, 20px);
+            padding: 0 clamp(12px, 4vw, 30px);
             flex-wrap: wrap;
             pointer-events: none;
         }
 
-        #ui-overlay button {
+        #toolbar button {
             pointer-events: auto;
-            background: rgba(0, 255, 200, 0.15);
-            border: 1px solid rgba(0, 255, 200, 0.4);
+            background: rgba(0, 255, 200, 0.08);
+            border: 1px solid rgba(0, 255, 200, 0.2);
             color: #aaffee;
-            padding: 12px 28px;
+            padding: clamp(10px, 2.5vw, 16px) clamp(18px, 4vw, 32px);
             border-radius: 50px;
-            font-size: 16px;
+            font-size: clamp(14px, 3vw, 18px);
             font-weight: 600;
             letter-spacing: 0.5px;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            box-shadow: 0 0 30px rgba(0, 255, 200, 0.1);
-            transition: all 0.25s ease;
-            text-shadow: 0 0 20px rgba(0, 255, 200, 0.3);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 0 30px rgba(0, 255, 200, 0.05);
+            transition: all 0.2s ease;
+            text-shadow: 0 0 20px rgba(0, 255, 200, 0.15);
             cursor: pointer;
-            min-width: 120px;
             touch-action: manipulation;
-        }
-
-        #ui-overlay button:active {
-            transform: scale(0.94);
-            background: rgba(0, 255, 200, 0.25);
-        }
-
-        #ui-overlay button.active {
-            background: rgba(255, 80, 80, 0.25);
-            border-color: rgba(255, 80, 80, 0.5);
-            color: #ffaaaa;
-            box-shadow: 0 0 40px rgba(255, 80, 80, 0.15);
-        }
-
-        #status {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 10;
-            color: rgba(170, 255, 238, 0.7);
-            font-size: 14px;
-            font-weight: 400;
-            letter-spacing: 1px;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 8px 20px;
-            border-radius: 30px;
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1px solid rgba(0, 255, 200, 0.1);
-            text-align: center;
+            min-height: 50px;
+            min-width: 80px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            flex: 0 1 auto;
             white-space: nowrap;
-            pointer-events: none;
         }
 
-        #fps-display {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            z-index: 10;
-            color: rgba(170, 255, 238, 0.4);
-            font-size: 12px;
-            font-family: monospace;
-            pointer-events: none;
-            background: rgba(0, 0, 0, 0.3);
-            padding: 4px 12px;
-            border-radius: 12px;
-            border: 1px solid rgba(0, 255, 200, 0.05);
+        #toolbar button:active {
+            transform: scale(0.94);
+            background: rgba(0, 255, 200, 0.18);
         }
 
-        /* Loading screen */
+        #toolbar button.active {
+            background: rgba(255, 80, 120, 0.2);
+            border-color: rgba(255, 80, 120, 0.35);
+            color: #ffaabb;
+            box-shadow: 0 0 40px rgba(255, 80, 120, 0.08);
+        }
+
+        #toolbar button.clear-btn {
+            background: rgba(255, 60, 60, 0.08);
+            border-color: rgba(255, 60, 60, 0.15);
+            color: #ff8888;
+        }
+        #toolbar button.clear-btn:active {
+            background: rgba(255, 60, 60, 0.2);
+        }
+
+        #toolbar button .icon {
+            font-size: clamp(16px, 3.2vw, 22px);
+            line-height: 1;
+        }
+
+        /* loading screen */
         #loading {
             position: fixed;
             inset: 0;
@@ -155,85 +193,105 @@
             letter-spacing: 2px;
             transition: opacity 0.8s ease;
         }
-
         #loading .spinner {
             width: 48px;
             height: 48px;
-            border: 3px solid rgba(0, 255, 200, 0.1);
+            border: 3px solid rgba(0, 255, 200, 0.08);
             border-top: 3px solid #00ffc8;
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin-bottom: 24px;
         }
-
         #loading .sub {
             font-size: 13px;
-            opacity: 0.5;
+            opacity: 0.4;
             margin-top: 8px;
             letter-spacing: 1px;
         }
-
         @keyframes spin {
             to {
                 transform: rotate(360deg);
             }
         }
-
-        @keyframes pulse {
-            0%,
-            100% {
-                opacity: 0.4;
-            }
-            50% {
-                opacity: 1;
-            }
+        #loading.hidden {
+            opacity: 0;
+            pointer-events: none;
         }
 
-        .hidden {
-            opacity: 0 !important;
-            pointer-events: none !important;
-        }
-
-        @media (max-width: 600px) {
-            #ui-overlay button {
-                padding: 10px 20px;
+        /* responsive tweaks */
+        @media (max-width: 480px) {
+            #toolbar {
+                gap: 8px;
+                padding: 0 10px;
+                bottom: max(14px, env(safe-area-inset-bottom, 14px));
+            }
+            #toolbar button {
+                min-height: 44px;
+                min-width: 60px;
+                padding: 8px 14px;
+                font-size: 12px;
+                border-radius: 40px;
+            }
+            #toolbar button .icon {
                 font-size: 14px;
-                min-width: 90px;
             }
-            #status {
-                font-size: 11px;
-                padding: 5px 14px;
-                top: 12px;
-                white-space: normal;
-                max-width: 80%;
-            }
-            #fps-display {
+        }
+
+        @media (max-width: 380px) {
+            #toolbar button {
+                min-height: 38px;
+                min-width: 50px;
+                padding: 6px 10px;
                 font-size: 10px;
-                top: 12px;
-                right: 12px;
-                padding: 2px 10px;
+                border-radius: 30px;
+            }
+            #toolbar button .icon {
+                font-size: 12px;
+            }
+        }
+
+        @supports (padding: max(0px)) {
+            #toolbar {
+                padding-left: max(12px, env(safe-area-inset-left));
+                padding-right: max(12px, env(safe-area-inset-right));
+                bottom: max(20px, env(safe-area-inset-bottom, 20px));
             }
         }
     </style>
 </head>
 <body>
 
+    <!-- LOADING -->
     <div id="loading">
         <div class="spinner"></div>
         <div>INITIALIZING</div>
-        <div class="sub">loading models &amp; camera...</div>
+        <div class="sub">camera &amp; hand model</div>
     </div>
 
+    <!-- MAIN -->
     <div id="container">
         <video id="video" playsinline autoplay muted></video>
         <canvas id="canvas"></canvas>
 
-        <div id="status">⚡ waiting for camera...</div>
+        <!-- "show hand" prompt -->
+        <div id="status">
+            SHOW HAND
+            <div class="sub">raise your palm to the camera</div>
+        </div>
+
         <div id="fps-display">-- FPS</div>
 
-        <div id="ui-overlay">
-            <button id="btn-toggle-skull" class="active">💀 SKULL</button>
-            <button id="btn-toggle-draw">✏️ DRAW</button>
+        <!-- TOOLBAR -->
+        <div id="toolbar">
+            <button id="btn-skeleton" class="active">
+                <span class="icon">👋</span> SKELETON
+            </button>
+            <button id="btn-draw" class="active">
+                <span class="icon">✏️</span> DRAW
+            </button>
+            <button id="btn-clear" class="clear-btn">
+                <span class="icon">🗑️</span> CLEAR
+            </button>
         </div>
     </div>
 
@@ -244,21 +302,18 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous">
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous">
-    </script>
 
     <script>
         // ============================================================
         //  CONFIG
         // ============================================================
-        const CONFIG = {
-            maxLinePoints: 180, // max points before fading
-            pointLifetime: 2800, // ms before a point fully fades
+        const CFG = {
+            maxLinePoints: 220,
+            pointLifetime: 2600,
             glowColor: '#00ffc8',
-            glowSize: 18,
-            skullColor: 'rgba(255, 80, 120, 0.85)',
+            glowSize: 20,
             skeletonColor: '#00ffc8',
-            skeletonGlow: 'rgba(0, 255, 200, 0.3)',
+            skeletonGlow: 'rgba(0,255,200,0.2)',
         };
 
         // ============================================================
@@ -270,138 +325,140 @@
         const statusEl = document.getElementById('status');
         const fpsEl = document.getElementById('fps-display');
         const loadingEl = document.getElementById('loading');
-        const btnSkull = document.getElementById('btn-toggle-skull');
-        const btnDraw = document.getElementById('btn-toggle-draw');
+
+        const btnSkeleton = document.getElementById('btn-skeleton');
+        const btnDraw = document.getElementById('btn-draw');
+        const btnClear = document.getElementById('btn-clear');
 
         // ============================================================
         //  STATE
         // ============================================================
-        let showSkull = true;
-        let drawMode = false; // if false, still tracks but doesn't draw the line
-        let drawPoints = []; // { x, y, t }
+        let showSkeleton = true;
+        let drawMode = true;
+        let drawPoints = [];
         let lastDrawPoint = null;
+
+        let latestHandData = null; // { landmarks, handedness }
+        let handDetected = false;
+
         let frameCount = 0;
         let lastFpsUpdate = performance.now();
         let currentFps = 0;
-        let isRunning = false;
+
         let camera = null;
+        let isRunning = false;
+        let renderId = null;
 
         // ============================================================
-        //  CANVAS SIZING
+        //  CANVAS SIZING (devicePixelRatio aware)
         // ============================================================
         function resizeCanvas() {
             const rect = canvas.parentElement.getBoundingClientRect();
-            canvas.width = rect.width * devicePixelRatio;
-            canvas.height = rect.height * devicePixelRatio;
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
             canvas.style.width = rect.width + 'px';
             canvas.style.height = rect.height + 'px';
-            ctx.scale(devicePixelRatio, devicePixelRatio);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         }
         resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+        });
 
         // ============================================================
         //  DRAWING HELPERS
         // ============================================================
 
-        /** Draw a glowing line with fading points */
+        /** Draw a glowing line from stored points (fading) */
         function drawGlowingLine() {
             const now = performance.now();
-            // Remove expired points
-            drawPoints = drawPoints.filter(p => (now - p.t) < CONFIG.pointLifetime);
-
-            // Limit max points (oldest removed)
-            while (drawPoints.length > CONFIG.maxLinePoints) {
-                drawPoints.shift();
-            }
+            // remove expired
+            drawPoints = drawPoints.filter(p => (now - p.t) < CFG.pointLifetime);
+            while (drawPoints.length > CFG.maxLinePoints) drawPoints.shift();
 
             if (drawPoints.length < 2) return;
 
-            const w = canvas.width / devicePixelRatio;
-            const h = canvas.height / devicePixelRatio;
+            const w = canvas.width / (window.devicePixelRatio || 1);
+            const h = canvas.height / (window.devicePixelRatio || 1);
+            const pts = drawPoints;
 
-            // Sort by time (oldest first)
-            const pts = [...drawPoints];
-
-            // Draw the line segments with varying alpha
             for (let i = 1; i < pts.length; i++) {
-                const p0 = pts[i - 1];
-                const p1 = pts[i];
-                const age0 = (now - p0.t) / CONFIG.pointLifetime;
-                const age1 = (now - p1.t) / CONFIG.pointLifetime;
-                const alpha0 = Math.max(0, 1 - age0);
-                const alpha1 = Math.max(0, 1 - age1);
-                const avgAlpha = (alpha0 + alpha1) / 2;
-                if (avgAlpha < 0.01) continue;
+                const p0 = pts[i - 1],
+                    p1 = pts[i];
+                const age0 = (now - p0.t) / CFG.pointLifetime;
+                const age1 = (now - p1.t) / CFG.pointLifetime;
+                const alpha = Math.max(0, (1 - (age0 + age1) / 2));
 
-                // Glow layers
-                const baseWidth = 2 + 2 * avgAlpha;
-                const glowWidth = CONFIG.glowSize * avgAlpha;
+                if (alpha < 0.01) continue;
 
-                // Outer glow
+                const baseW = 2 + 3 * alpha;
+                const glowW = CFG.glowSize * alpha;
+
+                // outer glow
                 ctx.save();
                 ctx.beginPath();
                 ctx.moveTo(p0.x, p0.y);
                 ctx.lineTo(p1.x, p1.y);
-                ctx.strokeStyle = `rgba(0, 255, 200, ${avgAlpha * 0.15})`;
-                ctx.lineWidth = glowWidth * 1.8;
-                ctx.shadowColor = CONFIG.glowColor;
-                ctx.shadowBlur = glowWidth * 2;
+                ctx.strokeStyle = `rgba(0,255,200,${alpha * 0.12})`;
+                ctx.lineWidth = glowW * 2.2;
+                ctx.shadowColor = CFG.glowColor;
+                ctx.shadowBlur = glowW * 2.5;
                 ctx.stroke();
 
-                // Inner glow
+                // inner glow
                 ctx.beginPath();
                 ctx.moveTo(p0.x, p0.y);
                 ctx.lineTo(p1.x, p1.y);
-                ctx.strokeStyle = `rgba(0, 255, 200, ${avgAlpha * 0.4})`;
-                ctx.lineWidth = glowWidth * 0.7;
-                ctx.shadowBlur = glowWidth * 0.8;
+                ctx.strokeStyle = `rgba(0,255,200,${alpha * 0.35})`;
+                ctx.lineWidth = glowW * 0.8;
+                ctx.shadowBlur = glowW * 1.2;
                 ctx.stroke();
 
-                // Core line
+                // core
                 ctx.beginPath();
                 ctx.moveTo(p0.x, p0.y);
                 ctx.lineTo(p1.x, p1.y);
-                const hue = 170 + 20 * (1 - avgAlpha);
-                ctx.strokeStyle = `hsla(${hue}, 100%, 70%, ${avgAlpha * 0.9})`;
-                ctx.lineWidth = baseWidth;
+                const hue = 170 + 25 * (1 - alpha);
+                ctx.strokeStyle = `hsla(${hue}, 100%, 72%, ${alpha * 0.9})`;
+                ctx.lineWidth = baseW;
                 ctx.shadowBlur = 0;
                 ctx.stroke();
                 ctx.restore();
 
-                // Glow dots at points (brighter at newer points)
-                if (i === pts.length - 1 || i % 3 === 0) {
-                    const dotAlpha = Math.max(0, 1 - age1) * 0.8;
-                    if (dotAlpha > 0.05) {
+                // glow dots
+                if (i === pts.length - 1 || i % 2 === 0) {
+                    const da = Math.max(0, 1 - age1) * 0.7;
+                    if (da > 0.04) {
                         ctx.save();
-                        const r = 2 + 3 * (1 - age1);
-                        const grad = ctx.createRadialGradient(p1.x, p1.y, 0, p1.x, p1.y, r * 4);
-                        grad.addColorStop(0, `rgba(0, 255, 200, ${dotAlpha * 0.9})`);
-                        grad.addColorStop(0.3, `rgba(0, 255, 200, ${dotAlpha * 0.4})`);
-                        grad.addColorStop(1, `rgba(0, 255, 200, 0)`);
+                        const r = 2 + 4 * (1 - age1);
+                        const grad = ctx.createRadialGradient(p1.x, p1.y, 0, p1.x, p1.y, r * 5);
+                        grad.addColorStop(0, `rgba(0,255,200,${da * 0.85})`);
+                        grad.addColorStop(0.4, `rgba(0,255,200,${da * 0.3})`);
+                        grad.addColorStop(1, `rgba(0,255,200,0)`);
                         ctx.fillStyle = grad;
                         ctx.beginPath();
-                        ctx.arc(p1.x, p1.y, r * 4, 0, Math.PI * 2);
+                        ctx.arc(p1.x, p1.y, r * 5, 0, Math.PI * 2);
                         ctx.fill();
                         ctx.restore();
                     }
                 }
             }
 
-            // Draw a bright tip at the most recent point
+            // bright tip
             if (pts.length > 0) {
                 const last = pts[pts.length - 1];
-                const age = (now - last.t) / CONFIG.pointLifetime;
+                const age = (performance.now() - last.t) / CFG.pointLifetime;
                 if (age < 0.5) {
                     ctx.save();
-                    const r = 6 + 10 * (1 - age);
+                    const r = 6 + 12 * (1 - age);
                     const grad = ctx.createRadialGradient(last.x, last.y, 0, last.x, last.y, r);
-                    grad.addColorStop(0, `rgba(180, 255, 240, 0.95)`);
-                    grad.addColorStop(0.3, `rgba(0, 255, 200, 0.6)`);
+                    grad.addColorStop(0, `rgba(200, 255, 245, 0.95)`);
+                    grad.addColorStop(0.25, `rgba(0, 255, 200, 0.6)`);
                     grad.addColorStop(1, `rgba(0, 255, 200, 0)`);
                     ctx.fillStyle = grad;
-                    ctx.shadowColor = CONFIG.glowColor;
-                    ctx.shadowBlur = 30;
+                    ctx.shadowColor = CFG.glowColor;
+                    ctx.shadowBlur = 40;
                     ctx.beginPath();
                     ctx.arc(last.x, last.y, r, 0, Math.PI * 2);
                     ctx.fill();
@@ -413,13 +470,15 @@
         /** Draw hand skeleton with glow */
         function drawHandSkeleton(landmarks, isLeft) {
             if (!landmarks) return;
-            const w = canvas.width / devicePixelRatio;
-            const h = canvas.height / devicePixelRatio;
+            const dpr = window.devicePixelRatio || 1;
+            const w = canvas.width / dpr;
+            const h = canvas.height / dpr;
 
-            // Map normalized coords to pixel
             const pts = landmarks.map(l => ({ x: l.x * w, y: l.y * h }));
 
-            // Hand connections (MediaPipe standard)
+            const color = isLeft ? '#ff6b9d' : '#00ffc8';
+            const glow = isLeft ? 'rgba(255,80,150,0.2)' : 'rgba(0,255,200,0.2)';
+
             const connections = [
                 [0, 1],
                 [1, 2],
@@ -444,10 +503,7 @@
                 [0, 17]
             ];
 
-            const color = isLeft ? '#ff6b9d' : '#00ffc8';
-            const glow = isLeft ? 'rgba(255, 80, 150, 0.25)' : 'rgba(0, 255, 200, 0.25)';
-
-            // Glow underlay
+            // glow underlay
             ctx.save();
             for (const [i, j] of connections) {
                 const p1 = pts[i],
@@ -457,14 +513,14 @@
                 ctx.moveTo(p1.x, p1.y);
                 ctx.lineTo(p2.x, p2.y);
                 ctx.strokeStyle = glow;
-                ctx.lineWidth = 12;
+                ctx.lineWidth = 14;
                 ctx.shadowColor = color;
-                ctx.shadowBlur = 25;
+                ctx.shadowBlur = 30;
                 ctx.stroke();
             }
             ctx.restore();
 
-            // Main lines
+            // main lines
             ctx.save();
             for (const [i, j] of connections) {
                 const p1 = pts[i],
@@ -474,32 +530,31 @@
                 ctx.moveTo(p1.x, p1.y);
                 ctx.lineTo(p2.x, p2.y);
                 ctx.strokeStyle = color;
-                ctx.lineWidth = 2.5;
+                ctx.lineWidth = 2.8;
                 ctx.shadowColor = color;
-                ctx.shadowBlur = 12;
+                ctx.shadowBlur = 14;
                 ctx.stroke();
             }
             ctx.restore();
 
-            // Joints (glowing circles)
+            // joints
             ctx.save();
             for (let i = 0; i < pts.length; i++) {
                 const p = pts[i];
                 if (!p) continue;
                 const isTip = [4, 8, 12, 16, 20].includes(i);
-                const radius = isTip ? 5 : 3.5;
-                const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 3);
+                const radius = isTip ? 5.5 : 4;
+                const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 4);
                 grad.addColorStop(0, '#ffffff');
                 grad.addColorStop(0.3, color);
                 grad.addColorStop(1, 'rgba(0,0,0,0)');
                 ctx.fillStyle = grad;
                 ctx.shadowColor = color;
-                ctx.shadowBlur = 20;
+                ctx.shadowBlur = 24;
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, radius * 3, 0, Math.PI * 2);
+                ctx.arc(p.x, p.y, radius * 4, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Bright core
                 ctx.shadowBlur = 0;
                 ctx.fillStyle = isTip ? '#ffffff' : color;
                 ctx.beginPath();
@@ -509,200 +564,46 @@
             ctx.restore();
         }
 
-        /** Draw a skull overlay on face landmarks */
-        function drawSkull(landmarks) {
-            if (!landmarks || landmarks.length < 468) return;
-            const w = canvas.width / devicePixelRatio;
-            const h = canvas.height / devicePixelRatio;
+        // ============================================================
+        //  RENDER LOOP (decoupled from detection)
+        // ============================================================
+        function render() {
+            const dpr = window.devicePixelRatio || 1;
+            const w = canvas.width / dpr;
+            const h = canvas.height / dpr;
 
-            const pts = landmarks.map(l => ({ x: l.x * w, y: l.y * h }));
+            // black bg
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, w, h);
 
-            // ----- Skull outline using face contour (0-16) -----
-            const contour = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
-
-            // Also use the full face contour for the skull shape
-            // We'll use a subset for the skull dome
-            const skullIndices = [
-                10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400,
-                377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67,
-                109, 10
-            ];
-
-            // Draw skull outline with glow
-            ctx.save();
-
-            // Glow layer
-            ctx.beginPath();
-            for (let i = 0; i < skullIndices.length; i++) {
-                const idx = skullIndices[i];
-                if (idx >= pts.length) continue;
-                const p = pts[idx];
-                if (i === 0) ctx.moveTo(p.x, p.y);
-                else ctx.lineTo(p.x, p.y);
-            }
-            ctx.closePath();
-            ctx.strokeStyle = 'rgba(255, 60, 100, 0.15)';
-            ctx.lineWidth = 20;
-            ctx.shadowColor = '#ff3c64';
-            ctx.shadowBlur = 50;
-            ctx.stroke();
-
-            // Main skull outline
-            ctx.beginPath();
-            for (let i = 0; i < skullIndices.length; i++) {
-                const idx = skullIndices[i];
-                if (idx >= pts.length) continue;
-                const p = pts[idx];
-                if (i === 0) ctx.moveTo(p.x, p.y);
-                else ctx.lineTo(p.x, p.y);
-            }
-            ctx.closePath();
-            ctx.strokeStyle = 'rgba(255, 60, 100, 0.7)';
-            ctx.lineWidth = 2.5;
-            ctx.shadowColor = '#ff3c64';
-            ctx.shadowBlur = 20;
-            ctx.stroke();
-
-            // ----- Eye sockets -----
-            const leftEye = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
-            const rightEye = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
-
-            // Left eye socket
-            ctx.beginPath();
-            for (let i = 0; i < leftEye.length; i++) {
-                const idx = leftEye[i];
-                if (idx >= pts.length) continue;
-                const p = pts[idx];
-                if (i === 0) ctx.moveTo(p.x, p.y);
-                else ctx.lineTo(p.x, p.y);
-            }
-            ctx.closePath();
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(255, 80, 120, 0.6)';
-            ctx.lineWidth = 2;
-            ctx.shadowColor = '#ff3c64';
-            ctx.shadowBlur = 15;
-            ctx.stroke();
-
-            // Right eye socket
-            ctx.beginPath();
-            for (let i = 0; i < rightEye.length; i++) {
-                const idx = rightEye[i];
-                if (idx >= pts.length) continue;
-                const p = pts[idx];
-                if (i === 0) ctx.moveTo(p.x, p.y);
-                else ctx.lineTo(p.x, p.y);
-            }
-            ctx.closePath();
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(255, 80, 120, 0.6)';
-            ctx.lineWidth = 2;
-            ctx.shadowColor = '#ff3c64';
-            ctx.shadowBlur = 15;
-            ctx.stroke();
-
-            // Pupil glow (inner eye)
-            const leftPupil = 468,
-                rightPupil = 468;
-            // Use center of eye sockets
-            const lCenter = pts[33] || pts[133];
-            const rCenter = pts[362] || pts[263];
-            if (lCenter) {
-                ctx.shadowBlur = 25;
-                ctx.shadowColor = '#ff2a5a';
-                ctx.fillStyle = 'rgba(255, 40, 80, 0.35)';
-                ctx.beginPath();
-                ctx.arc(lCenter.x, lCenter.y, 6, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            if (rCenter) {
-                ctx.shadowBlur = 25;
-                ctx.shadowColor = '#ff2a5a';
-                ctx.fillStyle = 'rgba(255, 40, 80, 0.35)';
-                ctx.beginPath();
-                ctx.arc(rCenter.x, rCenter.y, 6, 0, Math.PI * 2);
-                ctx.fill();
+            // draw hand skeleton if available
+            if (handDetected && latestHandData && showSkeleton) {
+                const landmarks = latestHandData.landmarks;
+                const isLeft = latestHandData.handedness === 'Left';
+                drawHandSkeleton(landmarks, isLeft);
             }
 
-            // ----- Nose hole -----
-            const noseIdx = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
-            ctx.beginPath();
-            for (let i = 0; i < noseIdx.length; i++) {
-                const idx = noseIdx[i];
-                if (idx >= pts.length) continue;
-                const p = pts[idx];
-                if (i === 0) ctx.moveTo(p.x, p.y);
-                else ctx.lineTo(p.x, p.y);
-            }
-            ctx.closePath();
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(255, 80, 120, 0.4)';
-            ctx.lineWidth = 1.5;
-            ctx.shadowBlur = 10;
-            ctx.stroke();
-
-            // ----- Jaw / Teeth marks -----
-            const jawIdx = [0, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
-                40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64,
-                65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89,
-                90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
-                112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131,
-                132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151,
-                152
-            ];
-            // Draw teeth marks along the jaw
-            ctx.shadowBlur = 8;
-            ctx.shadowColor = '#ff3c64';
-            ctx.strokeStyle = 'rgba(255, 60, 100, 0.3)';
-            ctx.lineWidth = 1.2;
-            for (let i = 0; i < jawIdx.length - 2; i += 3) {
-                const idx1 = jawIdx[i];
-                const idx2 = jawIdx[i + 2];
-                if (idx1 >= pts.length || idx2 >= pts.length) continue;
-                const p1 = pts[idx1];
-                const p2 = pts[idx2];
-                if (!p1 || !p2) continue;
-                ctx.beginPath();
-                ctx.moveTo(p1.x, p1.y);
-                ctx.lineTo(p2.x, p2.y);
-                ctx.stroke();
+            // draw glowing line
+            if (drawMode && drawPoints.length > 1) {
+                drawGlowingLine();
             }
 
-            // ----- Skull crack lines (decorative) -----
-            ctx.shadowBlur = 12;
-            ctx.shadowColor = '#ff3c64';
-            ctx.strokeStyle = 'rgba(255, 60, 100, 0.15)';
-            ctx.lineWidth = 1.5;
-            const crackPoints = [
-                [10, 338],
-                [338, 297],
-                [297, 332],
-                [332, 284],
-                [284, 251],
-                [251, 389],
-                [389, 356]
-            ];
-            for (const [i, j] of crackPoints) {
-                if (i >= pts.length || j >= pts.length) continue;
-                const p1 = pts[i],
-                    p2 = pts[j];
-                if (!p1 || !p2) continue;
-                ctx.beginPath();
-                ctx.moveTo(p1.x, p1.y);
-                ctx.lineTo(p2.x, p2.y);
-                ctx.stroke();
+            // update fps
+            frameCount++;
+            const now = performance.now();
+            if (now - lastFpsUpdate > 400) {
+                currentFps = Math.round(frameCount / ((now - lastFpsUpdate) / 1000));
+                frameCount = 0;
+                lastFpsUpdate = now;
+                fpsEl.textContent = currentFps + ' FPS';
             }
 
-            ctx.restore();
+            renderId = requestAnimationFrame(render);
         }
 
         // ============================================================
-        //  MEDIAPIPE SETUP
+        //  MEDIAPIPE HANDS
         // ============================================================
-
         const hands = new Hands({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
@@ -714,125 +615,57 @@
             minTrackingConfidence: 0.6,
         });
 
-        const faceMesh = new FaceMesh({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-        });
-
-        faceMesh.setOptions({
-            maxNumFaces: 2,
-            refineLandmarks: true,
-            minDetectionConfidence: 0.6,
-            minTrackingConfidence: 0.5,
-        });
-
-        // ============================================================
-        //  MAIN DRAW LOOP
-        // ============================================================
-
-        function drawFrame(results) {
-            const w = canvas.width / devicePixelRatio;
-            const h = canvas.height / devicePixelRatio;
-
-            ctx.clearRect(0, 0, w, h);
-
-            // ---- Draw hands ----
+        hands.onResults((results) => {
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                for (let i = 0; i < results.multiHandLandmarks.length; i++) {
-                    const landmarks = results.multiHandLandmarks[i];
-                    const handedness = results.multiHandedness && results.multiHandedness[i] ?
-                        results.multiHandedness[i].label :
-                        'Right';
-                    const isLeft = handedness === 'Left';
-                    drawHandSkeleton(landmarks, isLeft);
+                // use the first hand
+                const idx = 0;
+                const landmarks = results.multiHandLandmarks[idx];
+                const handedness = results.multiHandedness && results.multiHandedness[idx] ?
+                    results.multiHandedness[idx].label :
+                    'Right';
 
-                    // Track index finger tip (landmark 8) for drawing
-                    if (drawMode && landmarks.length > 8) {
-                        const tip = landmarks[8];
-                        const x = tip.x * w;
-                        const y = tip.y * h;
-                        // Only add point if it's within reasonable bounds
-                        if (x > 0 && x < w && y > 0 && y < h) {
-                            const now = performance.now();
-                            // Throttle point addition to avoid too many points
-                            if (!lastDrawPoint || (now - lastDrawPoint.t) > 18) {
-                                drawPoints.push({ x, y, t: now });
-                                lastDrawPoint = { x, y, t: now };
-                                // Limit points
-                                while (drawPoints.length > CONFIG.maxLinePoints + 20) {
-                                    drawPoints.shift();
-                                }
+                latestHandData = { landmarks, handedness };
+                handDetected = true;
+
+                // hide "show hand" text
+                statusEl.classList.add('hidden');
+
+                // handle drawing from index finger tip (landmark 8)
+                if (drawMode && landmarks && landmarks.length > 8) {
+                    const dpr = window.devicePixelRatio || 1;
+                    const w = canvas.width / dpr;
+                    const h = canvas.height / dpr;
+                    const tip = landmarks[8];
+                    const x = tip.x * w;
+                    const y = tip.y * h;
+                    if (x > 0 && x < w && y > 0 && y < h) {
+                        const now2 = performance.now();
+                        if (!lastDrawPoint || (now2 - lastDrawPoint.t) > 16) {
+                            drawPoints.push({ x, y, t: now2 });
+                            lastDrawPoint = { x, y, t: now2 };
+                            while (drawPoints.length > CFG.maxLinePoints + 30) {
+                                drawPoints.shift();
                             }
                         }
                     }
                 }
-            }
-
-            // ---- Draw faces (skull) ----
-            if (showSkull && results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-                for (const landmarks of results.multiFaceLandmarks) {
-                    drawSkull(landmarks);
-                }
-            }
-
-            // ---- Draw glowing line ----
-            if (drawMode && drawPoints.length > 1) {
-                drawGlowingLine();
-            }
-
-            // ---- FPS ----
-            frameCount++;
-            const now2 = performance.now();
-            if (now2 - lastFpsUpdate > 500) {
-                currentFps = Math.round(frameCount / ((now2 - lastFpsUpdate) / 1000));
-                frameCount = 0;
-                lastFpsUpdate = now2;
-                fpsEl.textContent = currentFps + ' FPS';
-            }
-        }
-
-        // ============================================================
-        //  MEDIAPIPE CALLBACKS
-        // ============================================================
-
-        hands.onResults((results) => {
-            // We store the hand results and pass to the main draw
-            // We need to combine with face results
-            window._handResults = results;
-            if (window._faceResults) {
-                const combined = {
-                    multiHandLandmarks: window._handResults.multiHandLandmarks || [],
-                    multiHandedness: window._handResults.multiHandedness || [],
-                    multiFaceLandmarks: window._faceResults.multiFaceLandmarks || [],
-                };
-                drawFrame(combined);
-            }
-        });
-
-        faceMesh.onResults((results) => {
-            window._faceResults = results;
-            if (window._handResults) {
-                const combined = {
-                    multiHandLandmarks: window._handResults.multiHandLandmarks || [],
-                    multiHandedness: window._handResults.multiHandedness || [],
-                    multiFaceLandmarks: window._faceResults.multiFaceLandmarks || [],
-                };
-                drawFrame(combined);
+            } else {
+                handDetected = false;
+                latestHandData = null;
+                // show "show hand" text
+                statusEl.classList.remove('hidden');
             }
         });
 
         // ============================================================
         //  CAMERA
         // ============================================================
-
         function initCamera() {
             const cam = new Camera(video, {
                 onFrame: async () => {
                     try {
                         await hands.send({ image: video });
-                        await faceMesh.send({ image: video });
-                    } catch (e) {
-                        // silent
-                    }
+                    } catch (_) { /* ignore */ }
                 },
                 width: 640,
                 height: 480,
@@ -844,102 +677,108 @@
         // ============================================================
         //  UI CONTROLS
         // ============================================================
-
-        btnSkull.addEventListener('click', () => {
-            showSkull = !showSkull;
-            btnSkull.classList.toggle('active');
-            btnSkull.textContent = showSkull ? '💀 SKULL' : '💀 OFF';
+        btnSkeleton.addEventListener('click', () => {
+            showSkeleton = !showSkeleton;
+            btnSkeleton.classList.toggle('active');
+            btnSkeleton.innerHTML = showSkeleton ?
+                '<span class="icon">👋</span> SKELETON' :
+                '<span class="icon">👋</span> OFF';
         });
 
         btnDraw.addEventListener('click', () => {
             drawMode = !drawMode;
             btnDraw.classList.toggle('active');
-            btnDraw.textContent = drawMode ? '✏️ DRAW ON' : '✏️ DRAW';
+            btnDraw.innerHTML = drawMode ?
+                '<span class="icon">✏️</span> DRAW' :
+                '<span class="icon">✏️</span> OFF';
             if (!drawMode) {
-                // Clear the draw points when turning off
+                // clear points when turning off
                 drawPoints = [];
                 lastDrawPoint = null;
             }
         });
 
+        btnClear.addEventListener('click', () => {
+            drawPoints = [];
+            lastDrawPoint = null;
+            // haptic feedback if available
+            if (navigator.vibrate) navigator.vibrate(10);
+        });
+
         // ============================================================
         //  INIT
         // ============================================================
-
         async function init() {
             try {
-                statusEl.textContent = '📷 accessing camera...';
+                statusEl.textContent = 'SHOW HAND';
+                statusEl.classList.remove('hidden');
 
                 camera = initCamera();
                 await camera.start();
 
-                statusEl.textContent = '✅ tracking hands & faces';
                 isRunning = true;
-
-                // Hide loading screen
                 loadingEl.classList.add('hidden');
-                setTimeout(() => {
-                    loadingEl.style.display = 'none';
-                }, 800);
+                setTimeout(() => { loadingEl.style.display = 'none'; }, 600);
 
-                // Start the draw loop (it's driven by the onResults callbacks)
+                // start render loop
+                render();
 
             } catch (err) {
                 console.error('Init error:', err);
-                statusEl.textContent = '❌ error: ' + (err.message || 'unknown');
+                statusEl.textContent = '⚠️ CAMERA ERROR';
+                statusEl.classList.remove('hidden');
                 loadingEl.innerHTML = `
-              <div style="color:#ff6b6b;font-size:48px;margin-bottom:20px;">⚠️</div>
-              <div style="color:#ff6b6b;">Camera / Model Error</div>
+              <div style="color:#ff6b6b;font-size:40px;margin-bottom:16px;">⚠️</div>
+              <div style="color:#ff6b6b;font-size:18px;">Camera access failed</div>
               <div class="sub" style="color:#ff6b6b;opacity:0.7;max-width:300px;text-align:center;margin-top:12px;line-height:1.5;">
-                ${err.message || 'Please allow camera access and try again.'}
+                ${err.message || 'Please allow camera access and reload.'}
               </div>
-              <button onclick="location.reload()" style="margin-top:24px;padding:12px 32px;background:rgba(255,100,100,0.2);border:1px solid rgba(255,100,100,0.3);border-radius:30px;color:#ff8a8a;font-size:16px;cursor:pointer;">
-                🔄 Retry
+              <button onclick="location.reload()" style="margin-top:24px;padding:14px 36px;background:rgba(255,100,100,0.15);border:1px solid rgba(255,100,100,0.25);border-radius:40px;color:#ff8a8a;font-size:16px;cursor:pointer;touch-action:manipulation;">
+                🔄 Reload
               </button>
             `;
             }
         }
 
-        // Handle visibility change - pause/resume
+        // visibility change – pause/resume
         document.addEventListener('visibilitychange', () => {
             if (document.hidden && camera) {
-                // Pause
+                // pause if needed
             } else if (!document.hidden && camera) {
-                // Resume
+                // resume
             }
         });
 
-        // Handle page unload
         window.addEventListener('beforeunload', () => {
             if (camera) {
-                try { camera.stop(); } catch (e) {}
+                try { camera.stop(); } catch (_) {}
+            }
+            if (renderId) {
+                cancelAnimationFrame(renderId);
             }
         });
 
-        // Start
+        // start
         init();
 
         // ============================================================
-        //  MOBILE FRIENDLY: touch events for draw toggle (optional)
+        //  MOBILE SHORTCUTS: double-tap canvas toggles draw
         // ============================================================
-
-        // Double tap on canvas toggles draw mode
         let lastTap = 0;
         canvas.addEventListener('touchend', (e) => {
             const now2 = Date.now();
             if (now2 - lastTap < 400) {
-                // Double tap
                 btnDraw.click();
                 e.preventDefault();
             }
             lastTap = now2;
         });
 
-        // Also allow draw mode to be toggled with a long press on canvas
+        // long-press toggles skeleton
         let longPressTimer = null;
-        canvas.addEventListener('touchstart', (e) => {
+        canvas.addEventListener('touchstart', () => {
             longPressTimer = setTimeout(() => {
-                btnDraw.click();
+                btnSkeleton.click();
                 longPressTimer = null;
             }, 700);
         });
@@ -956,12 +795,13 @@
             }
         });
 
-        console.log('🖐️ Hand & Face Skeleton ESP loaded');
-        console.log('💡 Controls:');
-        console.log('  - Toggle SKULL overlay');
-        console.log('  - Toggle DRAW mode (index finger trail)');
-        console.log('  - Double-tap canvas to toggle DRAW');
-        console.log('  - Long-press canvas to toggle DRAW');
+        console.log('🖐️ Hand Skeleton + Draw loaded');
+        console.log('📱 Controls:');
+        console.log('  👋 Skeleton toggle');
+        console.log('  ✏️ Draw toggle');
+        console.log('  🗑️ Clear drawing');
+        console.log('  Double-tap canvas → toggle DRAW');
+        console.log('  Long-press canvas → toggle SKELETON');
     </script>
 
 </body>
