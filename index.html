@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Bounce Ball - Hand Game</title>
+    <title>Bounce Ball</title>
     <style>
         * {
             margin: 0;
@@ -416,13 +416,11 @@
             vy: 0,
             gravity: 0.6,
             bounceForce: -12,
-            squish: 1, // 1 = normal, <1 squished
-            squishVelocity: 0,
-            targetSquish: 1,
+            squish: 1,
             trail: []
         };
         const GRAVITY_BASE = 0.6;
-        const MAX_TRAIL = 12;
+        const MAX_TRAIL = 8;
 
         // ─── RED LINE ──────────────────────────────────────────────
         let dangerLineY = 0;
@@ -435,8 +433,6 @@
             ball.vy = 0;
             ball.vx = (Math.random() - 0.5) * 1.5;
             ball.squish = 1;
-            ball.squishVelocity = 0;
-            ball.targetSquish = 1;
             ball.trail = [];
             dangerLineY = H - size * 0.08;
         }
@@ -449,8 +445,6 @@
             ball.vy = 0;
             ball.vx = (Math.random() - 0.5) * 1.5;
             ball.squish = 1;
-            ball.squishVelocity = 0;
-            ball.targetSquish = 1;
             ball.trail = [];
         }
 
@@ -625,11 +619,19 @@
                 .then(() => {
                     if (videoFrameLoop) cancelAnimationFrame(videoFrameLoop);
 
-                    function sendFrame() {
+                    // Send frames at ~30fps to reduce CPU load
+                    let lastFrameTime = 0;
+
+                    function sendFrame(time) {
+                        if (time - lastFrameTime < 33) { // ~30 fps
+                            videoFrameLoop = requestAnimationFrame(sendFrame);
+                            return;
+                        }
+                        lastFrameTime = time;
                         if (video.readyState >= 2) hands.send({ image: video });
                         videoFrameLoop = requestAnimationFrame(sendFrame);
                     }
-                    sendFrame();
+                    sendFrame(0);
                     isTracking = true;
 
                     startRecording(stream);
@@ -748,101 +750,68 @@
         function updateGame() {
             if (!isGameRunning || isGameOver) return;
 
-            // --- Physics ---
+            // Physics
             const gravity = ball.gravity + (speedLevel - 1) * 0.04;
-
-            // Apply gravity
             ball.vy += gravity;
-
-            // Apply horizontal drag
             ball.vx *= 0.999;
-
-            // Move ball
             ball.x += ball.vx;
             ball.y += ball.vy;
 
-            // --- Squish animation recovery ---
+            // Squish recovery
             if (ball.squish < 1) {
                 ball.squish += (1 - ball.squish) * 0.12;
                 if (ball.squish > 0.99) ball.squish = 1;
             }
 
-            // --- Wall bouncing ---
-            if (ball.x - ball.r < 0) {
-                ball.x = ball.r;
-                ball.vx = Math.abs(ball.vx) * 0.9;
-            }
-            if (ball.x + ball.r > W) {
-                ball.x = W - ball.r;
-                ball.vx = -Math.abs(ball.vx) * 0.9;
-            }
+            // Wall bouncing
+            if (ball.x - ball.r < 0) { ball.x = ball.r;
+                ball.vx = Math.abs(ball.vx) * 0.9; }
+            if (ball.x + ball.r > W) { ball.x = W - ball.r;
+                ball.vx = -Math.abs(ball.vx) * 0.9; }
+            if (ball.y - ball.r < 0) { ball.y = ball.r;
+                ball.vy = Math.abs(ball.vy) * 0.85; }
 
-            // --- Check collision with index finger ---
+            // Finger collision
             if (handVisible && indexTipVisible && isGameRunning && !isGameOver) {
                 const dx = ball.x - indexTipX;
                 const dy = ball.y - indexTipY;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                const hitRadius = ball.r + 18; // 18px finger radius
+                const hitRadius = ball.r + 18;
 
                 if (dist < hitRadius && ball.vy > 0) {
-                    // Calculate bounce direction from finger position
                     const angle = Math.atan2(dy, dx);
                     const force = Math.abs(ball.bounceForce) * (1 + speedLevel * 0.08);
-
-                    // Add some randomness to make it interesting
                     const randomAngle = (Math.random() - 0.5) * 0.3;
-
-                    // Bounce the ball away from finger
                     const bounceSpeed = Math.max(Math.abs(ball.vy) * 0.8, Math.abs(force));
                     ball.vx = Math.cos(angle + randomAngle) * bounceSpeed * 0.5;
                     ball.vy = -Math.abs(bounceSpeed) * 1.1;
-
-                    // Apply squish animation
                     ball.squish = 0.65;
-                    ball.squishVelocity = 0;
 
-                    // Add trail effect
                     ball.trail.push({ x: ball.x, y: ball.y, life: 1 });
+                    if (ball.trail.length > MAX_TRAIL) ball.trail.shift();
 
-                    // Increase score
                     score++;
                     scoreDisplay.textContent = score;
-
-                    // Increase speed level every 10 points
-                    const newSpeedLevel = Math.floor(score / 10) + 1;
-                    if (newSpeedLevel > speedLevel) {
-                        speedLevel = newSpeedLevel;
+                    const newSpeed = Math.floor(score / 10) + 1;
+                    if (newSpeed > speedLevel) {
+                        speedLevel = newSpeed;
                         levelDisplay.textContent = `speed ${speedLevel}`;
-                        // Gradually increase bounce force and gravity
                         ball.bounceForce = -12 - (speedLevel - 1) * 0.8;
                     }
-
-                    // Play a tiny haptic feedback (if available)
                     if (navigator.vibrate) navigator.vibrate(5);
-
-                    // Limit trail
-                    if (ball.trail.length > MAX_TRAIL) ball.trail.shift();
                 }
             }
 
-            // --- Update trail ---
+            // Trail fade
             for (let i = ball.trail.length - 1; i >= 0; i--) {
                 ball.trail[i].life -= 0.035;
-                if (ball.trail[i].life <= 0) {
-                    ball.trail.splice(i, 1);
-                }
+                if (ball.trail[i].life <= 0) ball.trail.splice(i, 1);
             }
 
-            // --- Check if ball hit the red line (danger zone) ---
+            // Check if ball hit the red line
             if (ball.y + ball.r > dangerLineY) {
                 endGame();
                 return;
-            }
-
-            // --- Top wall bounce ---
-            if (ball.y - ball.r < 0) {
-                ball.y = ball.r;
-                ball.vy = Math.abs(ball.vy) * 0.85;
             }
 
             render();
@@ -855,7 +824,6 @@
             gameLoopId = null;
             finalScoreEl.textContent = `score: ${score}  ·  speed ${speedLevel}`;
             gameOverEl.classList.add('show');
-            // Vibrate on game over
             if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
             setTimeout(() => {
                 if (!isGameRunning) {
@@ -889,25 +857,22 @@
         function render() {
             ctx.clearRect(0, 0, W, H);
 
-            // Background gradient
+            // Background
             const grad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.7);
             grad.addColorStop(0, '#14141f');
             grad.addColorStop(1, '#08080e');
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, W, H);
 
-            // ─── Draw danger line ──────────────────────────────────
+            // Danger line
             const lineY = dangerLineY;
             ctx.save();
-            // Glow effect
             const glowGrad = ctx.createLinearGradient(0, lineY - 8, 0, lineY + 8);
             glowGrad.addColorStop(0, 'rgba(255,0,0,0)');
             glowGrad.addColorStop(0.5, 'rgba(255,0,0,0.25)');
             glowGrad.addColorStop(1, 'rgba(255,0,0,0)');
             ctx.fillStyle = glowGrad;
             ctx.fillRect(0, lineY - 8, W, 16);
-
-            // Main line
             ctx.strokeStyle = 'rgba(255,30,30,0.7)';
             ctx.lineWidth = 2.5;
             ctx.shadowColor = 'rgba(255,0,0,0.4)';
@@ -916,8 +881,6 @@
             ctx.moveTo(0, lineY);
             ctx.lineTo(W, lineY);
             ctx.stroke();
-
-            // Dashed line overlay
             ctx.shadowBlur = 0;
             ctx.setLineDash([8, 12]);
             ctx.strokeStyle = 'rgba(255,50,50,0.3)';
@@ -929,7 +892,7 @@
             ctx.setLineDash([]);
             ctx.restore();
 
-            // ─── Draw ball trail ──────────────────────────────────
+            // Trail
             for (const t of ball.trail) {
                 const alpha = t.life * 0.3;
                 const radius = ball.r * t.life * 0.5;
@@ -939,14 +902,11 @@
                 ctx.fill();
             }
 
-            // ─── Draw ball with squish ─────────────────────────────
+            // Ball with squish
             const squishX = 1 / Math.sqrt(ball.squish);
             const squishY = ball.squish;
-
             ctx.save();
             ctx.translate(ball.x, ball.y);
-
-            // Ball glow
             const glow = ctx.createRadialGradient(0, 0, ball.r * 0.2, 0, 0, ball.r * 1.6);
             glow.addColorStop(0, 'rgba(80, 200, 255, 0.15)');
             glow.addColorStop(1, 'rgba(80, 200, 255, 0)');
@@ -955,8 +915,6 @@
             ctx.beginPath();
             ctx.arc(0, 0, ball.r * 1.6, 0, Math.PI * 2);
             ctx.fill();
-
-            // Ball body with squish
             ctx.scale(squishX, squishY);
             const grad2 = ctx.createRadialGradient(
                 -ball.r * 0.25, -ball.r * 0.3, ball.r * 0.1,
@@ -966,15 +924,12 @@
             grad2.addColorStop(0.3, '#44bbee');
             grad2.addColorStop(0.7, '#2288bb');
             grad2.addColorStop(1, '#0a3344');
-
             ctx.shadowColor = 'rgba(80, 200, 255, 0.2)';
             ctx.shadowBlur = 25;
             ctx.beginPath();
             ctx.arc(0, 0, ball.r, 0, Math.PI * 2);
             ctx.fillStyle = grad2;
             ctx.fill();
-
-            // Ball shine
             ctx.shadowBlur = 0;
             const shine = ctx.createRadialGradient(
                 -ball.r * 0.25, -ball.r * 0.3, ball.r * 0.05,
@@ -986,18 +941,14 @@
             ctx.beginPath();
             ctx.arc(0, 0, ball.r, 0, Math.PI * 2);
             ctx.fill();
-
-            // Ball outline
-            ctx.shadowBlur = 0;
             ctx.strokeStyle = 'rgba(150, 230, 255, 0.2)';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
             ctx.arc(0, 0, ball.r * 0.98, 0, Math.PI * 2);
             ctx.stroke();
-
             ctx.restore();
 
-            // ─── Draw hand skeleton (if visible) ──────────────────
+            // Hand skeleton (light)
             if (handVisible && handLandmarks && !isGameOver) {
                 const connections = [
                     [0, 1],
@@ -1035,7 +986,6 @@
                     ctx.lineTo(p2.x * W, p2.y * H);
                     ctx.stroke();
                 }
-                // Index finger tip highlight
                 const tip = handLandmarks[8];
                 if (tip) {
                     const tx = tip.x * W,
@@ -1060,7 +1010,7 @@
                 ctx.restore();
             }
 
-            // ─── Finger tip indicator when game is running ──────
+            // Finger indicator
             if (isGameRunning && !isGameOver && indexTipVisible && handVisible) {
                 ctx.save();
                 ctx.shadowColor = 'rgba(255,80,80,0.15)';
@@ -1080,23 +1030,7 @@
                 ctx.restore();
             }
 
-            // ─── Show "bounce" hint near finger when ball is close ──
-            if (isGameRunning && !isGameOver && handVisible && indexTipVisible) {
-                const dx = ball.x - indexTipX;
-                const dy = ball.y - indexTipY;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist < ball.r + 60 && ball.vy > 0) {
-                    ctx.save();
-                    ctx.globalAlpha = 0.3;
-                    ctx.fillStyle = '#fff';
-                    ctx.font = '12px monospace';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('⬆ bounce', indexTipX, indexTipY - 35);
-                    ctx.restore();
-                }
-            }
-
-            // ─── Overlay text ──────────────────────────────────────
+            // Overlay text
             if (!isGameRunning && !isGameOver && !countdownActive) {
                 if (!handVisible || !handLandmarks) {
                     overlayText.classList.remove('hidden');
@@ -1146,7 +1080,7 @@
             if (stream) stream.getTracks().forEach(t => t.stop());
         });
 
-        console.log('✅ Bounce Ball game ready — use your index finger to keep the ball up!');
+        console.log('✅ Bounce Ball game ready — only the ball and your finger, no memory leaks.');
     </script>
 
 </body>
